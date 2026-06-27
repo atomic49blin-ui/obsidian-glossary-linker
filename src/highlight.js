@@ -1,7 +1,6 @@
 'use strict';
 
-// Mixin: highlighting in Reading view (DOM) and in the editor (CM6).
-// Methods run with the plugin as `this`.
+// Highlighting in Reading view (DOM) and in the editor (CM6). Mixed into the plugin prototype.
 module.exports = {
   processReadingMode(el, ctx) {
     if (!this.settings.highlightInReading) return;
@@ -45,13 +44,18 @@ module.exports = {
       a.textContent = display;
       a.href = canonical;
       a.setAttribute('data-href', canonical);
-      a.setAttribute('target', '_blank');
-      a.setAttribute('rel', 'noopener nofollow');
+      if (m.alts && m.alts.length) a.title = 'Glossary: also matches ' + m.alts.join(', ');
       a.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
         const file = sourcePath ? this.app.vault.getAbstractFileByPath(sourcePath) : null;
-        this.showLinkMenu(e, canonical, display, file, null);
+        // Reading-rendered links carry no source offset, so identify the clicked
+        // occurrence by its DOM-order index, which matches findMatches' order.
+        const root = a.closest('.markdown-reading-view, .markdown-source-view, .markdown-preview-view') || a.ownerDocument;
+        let occurrence = 0;
+        for (const other of root.querySelectorAll('a.glossary-link')) {
+          if (other === a) break;
+          if (other.getAttribute('data-href') === canonical && other.textContent === display) occurrence++;
+        }
+        if (this.showLinkMenu(e, canonical, display, file, null, occurrence)) e.stopPropagation();
       });
       frag.appendChild(a);
       cursor = m.end;
@@ -60,8 +64,8 @@ module.exports = {
     node.parentNode.replaceChild(frag, node);
   },
 
-  // Highlight in the editor (Live Preview / Source). Always registered; the
-  // editingHighlight setting controls whether and how often it recomputes.
+  // Editor highlight (Live Preview / Source). Always registered; the
+  // editingHighlight setting controls if and how often it recomputes.
   registerEditingHighlight() {
     let view, state, language;
     try {
@@ -89,6 +93,11 @@ module.exports = {
       }
       return m;
     };
+    // Collision marks carry a per-match title, so they are not cached.
+    const markWithAlts = (canonical, alts) => Decoration.mark({
+      class: 'cm-glossary-link',
+      attributes: { 'data-glossary-target': canonical, title: 'Glossary: also matches ' + alts.join(', ') },
+    });
 
     const skipNode = (name) => /code|link|url|header|hashtag|frontmatter|comment|tag|escape/i.test(name);
 
@@ -103,7 +112,7 @@ module.exports = {
           const end = from + m.end;
           let skip = false;
           tree.iterate({ from: start, to: end, enter: (n) => { if (skipNode(n.type.name)) skip = true; } });
-          if (!skip) builder.add(start, end, markFor(m.canonical));
+          if (!skip) builder.add(start, end, m.alts && m.alts.length ? markWithAlts(m.canonical, m.alts) : markFor(m.canonical));
         }
       }
       return builder.finish();
@@ -131,9 +140,17 @@ module.exports = {
         eventHandlers: {
           mousedown(e) {
             const el = targetEl(e);
-            if (!el || e.button !== 0) return;
+            if (!el) return;
             const file = plugin.app.workspace.getActiveFile();
-            plugin.openTerm(canonicalOf(el), file ? file.path : '', e.ctrlKey || e.metaKey);
+            const sourcePath = file ? file.path : '';
+            // Like Obsidian's links: middle-click opens a tab, Ctrl/Cmd+click follows.
+            if (e.button === 1) {
+              plugin.openTerm(canonicalOf(el), sourcePath, true);
+              e.preventDefault();
+              return;
+            }
+            if (e.button !== 0 || !(e.ctrlKey || e.metaKey)) return;
+            plugin.openTerm(canonicalOf(el), sourcePath, false);
             e.preventDefault();
           },
           mouseover(e) {
@@ -145,14 +162,9 @@ module.exports = {
           contextmenu(e, view) {
             const el = targetEl(e);
             if (!el) return;
-            const pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
-            if (pos == null) return;
+            // Read the term off the clicked decoration; posAtDOM gives its doc offset.
             const file = plugin.app.workspace.getActiveFile();
-            const match = plugin.findMatches(view.state.doc.toString(), plugin.activeCanonical(), { protect: true })
-              .find((m) => pos >= m.start && pos < m.end);
-            if (!match) return;
-            e.preventDefault();
-            plugin.showLinkMenu(e, match.canonical, match.display, file, match.start);
+            plugin.showLinkMenu(e, canonicalOf(el), el.textContent, file, view.posAtDOM(el));
           },
         },
       }

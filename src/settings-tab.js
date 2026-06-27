@@ -1,6 +1,8 @@
 'use strict';
 
 const { PluginSettingTab, Setting, Notice } = require('obsidian');
+const { sanitizeFolder } = require('./constants');
+const { FolderSuggest, folderSuggestAvailable } = require('./folder-suggest');
 
 class GlossaryLinkerSettingTab extends PluginSettingTab {
   constructor(app, plugin) { super(app, plugin); this.plugin = plugin; }
@@ -11,17 +13,22 @@ class GlossaryLinkerSettingTab extends PluginSettingTab {
     const s = this.plugin.settings;
     const save = async (rebuild) => { await this.plugin.saveSettings(); if (rebuild) this.plugin.rebuildIndex(); };
 
-    // --- Scope ---
     containerEl.createEl('h3', { text: 'Scope' });
 
     new Setting(containerEl)
       .setName('Glossary folder')
-      .setDesc('Folder with one note per term (file name = term title). Both this folder\'s notes and their frontmatter "aliases" build the term index. Path is relative to the vault root.')
-      .addText((t) => t.setValue(s.glossaryFolder).onChange(async (v) => { s.glossaryFolder = v.trim(); await save(true); }));
+      .setDesc('Folder with one note per term (file name = the term title).')
+      .addText((t) => {
+        t.setValue(s.glossaryFolder).onChange(async (v) => { s.glossaryFolder = sanitizeFolder(v); await save(true); this.renderFolderStatus(); });
+        if (folderSuggestAvailable()) new FolderSuggest(this.app, t.inputEl);
+      });
+
+    this.folderStatusEl = containerEl.createEl('div', { cls: 'glossary-section-desc' });
+    this.renderFolderStatus();
 
     new Setting(containerEl)
       .setName('Link scope')
-      .setDesc('Which notes the plugin highlights terms in and turns them into links. "Listed folders only" restricts to the folders below; "Everywhere except listed" covers the vault but skips the folders below; "Everywhere" covers the whole vault. The always-excluded folders below are removed on top of all three.')
+      .setDesc('Which notes terms are highlighted and linked in.')
       .addDropdown((d) => d
         .addOption('folders', 'Listed folders only')
         .addOption('except', 'Everywhere except listed')
@@ -40,15 +47,14 @@ class GlossaryLinkerSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Always-excluded folders')
-      .setDesc('One folder path per line. Never highlighted, linked or scanned, whatever the mode above is. A good place for the .obsidian config folder and attachment folders.')
+      .setDesc('One folder path per line, never highlighted, linked or scanned, whatever the mode above is.')
       .addTextArea((t) => { t.setValue(s.excludeFolders).onChange(async (v) => { s.excludeFolders = v; await save(false); }); t.inputEl.rows = 3; });
 
-    // --- Matching ---
     containerEl.createEl('h3', { text: 'Matching' });
 
     new Setting(containerEl)
       .setName('Morphology')
-      .setDesc('How an inflected word in the text is matched to a term. The actual algorithm comes from the enabled language modules below, picked automatically by the word\'s script. "Stemmer" reduces words to their root (handles declensions and plurals like units → unit) and is recommended. "Ending strip" only chops common endings (lighter, fewer matches). "Exact match" requires the exact term/alias spelling.')
+      .setDesc('How an inflected word is matched to a term.')
       .addDropdown((d) => d
         .addOption('stemmer', 'Stemmer (recommended)')
         .addOption('endingStrip', 'Ending strip')
@@ -61,46 +67,36 @@ class GlossaryLinkerSettingTab extends PluginSettingTab {
     const enabledCount = langs.filter((l) => (s.enabledLanguages || []).includes(l.id)).length;
     if (this.showLanguages === undefined) this.showLanguages = false;
 
-    const langDesc = `Morphology modules in the "languages" folder — ${enabledCount} of ${langs.length} enabled`
-      + (errors.length ? `, ${errors.length} with errors` : '')
-      + '. Disabled languages are matched exactly (no inflection).';
+    const langDesc = `Bundled morphology modules — ${enabledCount} of ${langs.length} enabled`
+      + (errors.length ? `, ${errors.length} invalid` : '') + '.';
 
     new Setting(containerEl)
       .setName('Languages')
       .setDesc(langDesc)
-      .addExtraButton((b) => b.setIcon('refresh-cw').setTooltip('Reload — re-scan the languages folder').onClick(async () => {
-        await this.plugin.loadLanguages();
-        this.plugin.rebuildIndex();
-        this.display();
-      }))
       .addExtraButton((b) => b.setIcon(this.showLanguages ? 'chevron-up' : 'chevron-down')
         .setTooltip(this.showLanguages ? 'Hide languages' : 'Show languages')
         .onClick(() => { this.showLanguages = !this.showLanguages; this.display(); }));
 
-    if (!langs.length && !errors.length) {
-      containerEl.createEl('div', { cls: 'glossary-preview-empty', text: 'No language modules found.' });
-    }
-
     if (this.showLanguages) {
-      for (const lang of langs) {
+      langs.forEach((lang, i) => {
         const row = new Setting(containerEl)
           .setName(lang.name)
           .setDesc(`id: ${lang.id}`)
+          .addExtraButton((b) => b.setIcon('chevron-up').setTooltip('Higher priority').setDisabled(i === 0)
+            .onClick(async () => { this.plugin.moveLanguage(lang.id, -1); await this.applyLanguageChange(); }))
+          .addExtraButton((b) => b.setIcon('chevron-down').setTooltip('Lower priority').setDisabled(i === langs.length - 1)
+            .onClick(async () => { this.plugin.moveLanguage(lang.id, 1); await this.applyLanguageChange(); }))
           .addToggle((t) => t.setValue((s.enabledLanguages || []).includes(lang.id)).onChange(async (v) => {
             const set = new Set(s.enabledLanguages || []);
             if (v) set.add(lang.id); else set.delete(lang.id);
             s.enabledLanguages = [...set];
-            await this.plugin.saveSettings();
-            this.plugin.refreshActiveLanguages();
-            this.plugin.rebuildIndex();
-            this.plugin.rerenderViews();
-            this.display();
+            await this.applyLanguageChange();
           }));
         row.settingEl.addClass('glossary-lang-row');
-      }
+      });
       for (const bad of errors) {
         const row = new Setting(containerEl)
-          .setName(bad.file)
+          .setName(bad.id)
           .setDesc(`Invalid module: ${bad.error}`)
           .addExtraButton((b) => b.setIcon('alert-triangle').setTooltip(`Invalid module: ${bad.error}`).setDisabled(true));
         row.nameEl.addClass('glossary-lang-error');
@@ -111,30 +107,29 @@ class GlossaryLinkerSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Link first occurrence only')
-      .setDesc('When turning terms into links, link only the first occurrence of each term on a page and leave the rest as plain text. Off = link every occurrence.')
+      .setDesc('When turning terms into links, link only the first occurrence of each term on a page.')
       .addToggle((t) => t.setValue(s.linkFirstOnly).onChange(async (v) => { s.linkFirstOnly = v; await save(false); }));
 
     new Setting(containerEl)
       .setName('Excluded terms')
-      .setDesc('Term titles, one per line. These glossary terms are dropped from the index entirely — never highlighted or linked anywhere.')
+      .setDesc('Term titles or aliases, one per line — drops the whole matching entry from the index.')
       .addTextArea((t) => { t.setValue(s.excludeTerms).onChange(async (v) => { s.excludeTerms = v; await save(true); }); t.inputEl.rows = 3; });
 
     new Setting(containerEl)
       .setName('Excluded words')
-      .setDesc('Surface words, one per line. These words (and their inflections) never trigger a link, even if they match a term — useful for homonyms (e.g. a common word "lead" that collides with a term "Lead").')
+      .setDesc('Surface words, one per line, that never trigger a link even if they match a term.')
       .addTextArea((t) => { t.setValue(s.excludeWords).onChange(async (v) => { s.excludeWords = v; await save(true); }); t.inputEl.rows = 3; });
 
-    // --- Highlighting ---
     containerEl.createEl('h3', { text: 'Highlighting' });
 
     new Setting(containerEl)
       .setName('Highlight in Reading view')
-      .setDesc('In the fully-rendered Reading view, underline detected terms as clickable links (the note text on disk is not changed). They behave like real internal links: hover shows a page preview (per your Page Preview settings), click opens the note, right-click opens the actions menu.')
+      .setDesc('Underline detected terms as clickable links in Reading view (file unchanged).')
       .addToggle((t) => t.setValue(s.highlightInReading).onChange(async (v) => { s.highlightInReading = v; await save(false); this.plugin.rerenderViews(); }));
 
     new Setting(containerEl)
       .setName('Highlight while editing')
-      .setDesc('Underline terms in the editor (Live Preview / Source view) too, not just in Reading view. "Live" updates as you type; "On save" updates a moment after you stop typing (less flicker); "Off" leaves the editor unhighlighted. Takes effect immediately, no reload needed.')
+      .setDesc('Underline terms in the editor (Live Preview / Source) too.')
       .addDropdown((d) => d
         .addOption('off', 'Off')
         .addOption('live', 'Live (as you type)')
@@ -144,16 +139,25 @@ class GlossaryLinkerSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Skip headings')
-      .setDesc('Do not highlight or turn into links any terms that appear inside Markdown headings (lines starting with #). On = headings are left untouched.')
+      .setDesc('Do not highlight or link terms that appear inside Markdown headings.')
       .addToggle((t) => t.setValue(s.skipHeadings).onChange(async (v) => { s.skipHeadings = v; await save(false); this.plugin.rerenderViews(); }));
 
-    // --- Collecting aliases ---
+    new Setting(containerEl)
+      .setName('Status bar count')
+      .setDesc('Show how many glossary terms are on the current note in the status bar.')
+      .addToggle((t) => t.setValue(s.statusBar).onChange(async (v) => { s.statusBar = v; await save(false); this.plugin.updateStatusBar(); }));
+
+    new Setting(containerEl)
+      .setName('Count direct links')
+      .setDesc('Also count terms already linked directly, not only plain-text mentions.')
+      .addToggle((t) => t.setValue(s.statusBarIncludeLinks).onChange(async (v) => { s.statusBarIncludeLinks = v; await save(false); this.plugin.updateStatusBar(); }));
+
     containerEl.createEl('h3', { text: 'Collecting aliases' });
     containerEl.createEl('div', { cls: 'glossary-section-desc', text: 'Reads the links you already made by hand, like [[Term|some wording]], and adds that wording to the term\'s aliases — so the same wording links automatically next time.' });
 
     new Setting(containerEl)
       .setName('Alias form')
-      .setDesc('How the link text is stored as an alias. "Base form" reduces it to a dictionary form first, so one alias covers many word forms (link text "boxes" is stored as "box"). "As written" stores the exact text ("boxes"). "Both" stores both.')
+      .setDesc('How collected link text is stored as an alias.')
       .addDropdown((d) => d
         .addOption('lemma', 'Base form')
         .addOption('literal', 'As written')
@@ -163,7 +167,7 @@ class GlossaryLinkerSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Collect on save')
-      .setDesc('Collect aliases automatically when a note is saved (with a short delay). "Silent" adds new aliases without asking; "Ask first" shows a preview to confirm; "Off" = only via the commands.')
+      .setDesc('Collect aliases automatically when a note is saved.')
       .addDropdown((d) => d
         .addOption('off', 'Off')
         .addOption('silent', 'Silent (add automatically)')
@@ -173,21 +177,72 @@ class GlossaryLinkerSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Single-word aliases only')
-      .setDesc('Only collect link texts that are a single word. On = skip multi-word link text, which reduces to a base form poorly. Off = also collect multi-word texts as written.')
+      .setDesc('Only collect link texts that are a single word.')
       .addToggle((t) => t.setValue(s.harvestSingleWordOnly).onChange(async (v) => { s.harvestSingleWordOnly = v; await save(false); }));
 
     new Setting(containerEl)
       .setName('Minimum alias length')
-      .setDesc('Ignore collected aliases shorter than this many characters (avoids noise from 1–2 letter fragments).')
+      .setDesc('Ignore collected aliases shorter than this many characters.')
       .addText((t) => { t.inputEl.type = 'number'; t.inputEl.min = '1'; t.setValue(String(s.harvestMinLength)).onChange(async (v) => { const n = parseInt(v, 10); s.harvestMinLength = Number.isFinite(n) && n > 0 ? n : 1; await save(false); }); });
 
-    // --- Maintenance ---
+    containerEl.createEl('h3', { text: 'Context menu' });
+
+    new Setting(containerEl)
+      .setName('"Turn into links" items')
+      .setDesc('Show the "Turn into link" / "Turn all … into links" actions when right-clicking a highlighted term.')
+      .addToggle((t) => t.setValue(s.menuTurnInto).onChange(async (v) => { s.menuTurnInto = v; await save(false); }));
+
+    new Setting(containerEl)
+      .setName('"Collect aliases" item')
+      .setDesc('Show "Collect aliases from links (this note)" in the editor right-click menu.')
+      .addToggle((t) => t.setValue(s.menuCollect).onChange(async (v) => { s.menuCollect = v; await save(false); }));
+
+    new Setting(containerEl)
+      .setName('"Exclude word / term" items')
+      .setDesc('Show "Add … to excluded words / terms" when right-clicking a term, and "Add … to excluded words" on a selected word.')
+      .addToggle((t) => t.setValue(s.menuExclude).onChange(async (v) => { s.menuExclude = v; await save(false); }));
+
+    new Setting(containerEl)
+      .setName('"Open glossary note" items')
+      .setDesc('Show "Open glossary note" / "Open in new tab" when right-clicking a highlighted term.')
+      .addToggle((t) => t.setValue(s.menuOpen).onChange(async (v) => { s.menuOpen = v; await save(false); }));
+
+    new Setting(containerEl)
+      .setName('"Create term from selection" items')
+      .setDesc('Show the "Glossary: create term…" actions when right-clicking a plain text selection.')
+      .addToggle((t) => t.setValue(s.menuCreateTerm).onChange(async (v) => { s.menuCreateTerm = v; await save(false); }));
+
     containerEl.createEl('h3', { text: 'Maintenance' });
 
     new Setting(containerEl)
       .setName('Rebuild glossary index')
-      .setDesc('Re-scan the glossary folder now. The index also rebuilds automatically when glossary notes change.')
-      .addButton((b) => b.setButtonText('Rebuild').onClick(() => { this.plugin.rebuildIndex(); new Notice('Glossary Linker: index rebuilt'); }));
+      .setDesc('Re-scan the glossary folder now.')
+      .addButton((b) => b.setButtonText('Rebuild').onClick(() => { this.plugin.rebuildIndex(); new Notice('Glossary Linker: index rebuilt'); this.renderFolderStatus(); }));
+  }
+
+  async applyLanguageChange() {
+    await this.plugin.saveSettings();
+    this.plugin.refreshActiveLanguages();
+    this.plugin.rebuildIndex();
+    this.plugin.rerenderViews();
+    this.display();
+  }
+
+  renderFolderStatus() {
+    const el = this.folderStatusEl;
+    if (!el) return;
+    el.empty();
+    el.removeClass('glossary-lang-error');
+    const path = (this.plugin.settings.glossaryFolder || '').replace(/\/+$/, '');
+    const f = path ? this.app.vault.getAbstractFileByPath(path) : null;
+    const isFolder = !!f && f.children !== undefined; // TFolder exposes children
+    if (!isFolder) {
+      el.addClass('glossary-lang-error');
+      el.setText('⚠ Folder not found — no terms will be indexed.');
+      return;
+    }
+    const n = (this.plugin.index && this.plugin.index.termCount) || 0;
+    el.setText(`${n} term${n === 1 ? '' : 's'} indexed.`);
   }
 }
 

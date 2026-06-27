@@ -11,14 +11,16 @@ var require_constants = __commonJS({
     "use strict";
     var DEFAULT_SETTINGS2 = {
       glossaryFolder: "glossary",
-      scopeMode: "folders",
+      scopeMode: "vault",
       // 'folders' | 'except' | 'vault'
-      scopeFolders: "design\narchitecture\nfeatures\nguides\nvision",
-      excludeFolders: "_meta\n_attachments\n.obsidian",
+      scopeFolders: "",
+      excludeFolders: "",
       matchMode: "stemmer",
       // 'stemmer' | 'endingStrip' | 'exact'
       enabledLanguages: null,
-      // null = enable everything discovered on first run
+      // null until first-run defaults are picked
+      languageOrder: [],
+      // ids in priority order (first = highest); overrides module defaults
       aliasHarvestMode: "lemma",
       // 'lemma' | 'literal' | 'both'
       harvestOnSave: "off",
@@ -31,10 +33,18 @@ var require_constants = __commonJS({
       highlightInReading: true,
       editingHighlight: "live",
       // 'off' | 'live' | 'onSave'
-      skipHeadings: true
+      skipHeadings: true,
+      statusBar: true,
+      statusBarIncludeLinks: true,
+      menuTurnInto: true,
+      menuCollect: true,
+      menuOpen: true,
+      menuCreateTerm: true,
+      menuExclude: true
     };
     var splitLines2 = (s) => (s || "").split("\n").map((x) => x.trim()).filter(Boolean);
-    module2.exports = { DEFAULT_SETTINGS: DEFAULT_SETTINGS2, splitLines: splitLines2 };
+    var sanitizeFolder2 = (s) => (s || "").split("/").map((x) => x.trim()).filter((x) => x && x !== "." && x !== "..").join("/");
+    module2.exports = { DEFAULT_SETTINGS: DEFAULT_SETTINGS2, splitLines: splitLines2, sanitizeFolder: sanitizeFolder2 };
   }
 });
 
@@ -139,14 +149,17 @@ var require_ru = __commonJS({
         return [es, st];
       return [es];
     }
-    function lemma(word) {
-      word = word.toLowerCase().replace(/ё/g, "\u0435");
-      if (word.length > 3 && (word.endsWith("\u0435\u043C") || word.endsWith("\u0451\u043C"))) {
-        const before = word[word.length - 3];
+    function softStemNoun(word) {
+      const w = word.toLowerCase().replace(/ё/g, "\u0435");
+      if (w.length > 3 && w.endsWith("\u0435\u043C")) {
+        const before = w[w.length - 3];
         if (VOWELS.includes(before))
-          return word.slice(0, -2) + "\u0439";
+          return w.slice(0, -2) + "\u0439";
       }
-      return strip(word);
+      return null;
+    }
+    function lemma(word) {
+      return softStemNoun(word) || strip(word);
     }
     module2.exports = {
       id: "ru",
@@ -157,11 +170,84 @@ var require_ru = __commonJS({
         const w = word.toLowerCase();
         if (mode === "exact")
           return [w];
-        if (mode === "endingStrip")
-          return [strip(w)];
-        return stemKeys(w);
+        const keyer = (x) => mode === "endingStrip" ? [strip(x)] : stemKeys(x);
+        const ks = keyer(w);
+        const soft = softStemNoun(w);
+        if (soft) {
+          for (const sk of keyer(soft))
+            if (!ks.includes(sk))
+              ks.push(sk);
+        }
+        return ks;
       },
       lemma
+    };
+  }
+});
+
+// languages/uk.js
+var require_uk = __commonJS({
+  "languages/uk.js"(exports2, module2) {
+    "use strict";
+    var ENDINGS = [
+      "\u0430\u043C\u0438",
+      "\u044F\u043C\u0438",
+      "\u043E\u0432\u0456",
+      "\u0435\u0432\u0456",
+      "\u043E\u0433\u043E",
+      "\u043E\u043C\u0443",
+      "\u0435\u043C\u0443",
+      "\u0438\u043C\u0438",
+      "\u0438\u0445",
+      "\u0430\u0445",
+      "\u044F\u0445",
+      "\u0456\u0432",
+      "\u043E\u044E",
+      "\u0435\u044E",
+      "\u043E\u043C",
+      "\u0435\u043C",
+      "\u0435\u0439",
+      "\u0438\u0439",
+      "\u0456\u0439",
+      "\u0430",
+      "\u044F",
+      "\u0443",
+      "\u044E",
+      "\u0435",
+      "\u043E",
+      "\u0438",
+      "\u0456",
+      "\u0457",
+      "\u044C"
+    ].sort((a, b) => b.length - a.length);
+    var CLOSED_SYLLABLE = /^(.*)і([^аеєиіїоуюя]+)$/;
+    function strip(word) {
+      const w = word.toLowerCase();
+      for (const e of ENDINGS) {
+        if (w.length - e.length >= 3 && w.endsWith(e))
+          return w.slice(0, -e.length);
+      }
+      return w;
+    }
+    function alternations(stem) {
+      const m = CLOSED_SYLLABLE.exec(stem);
+      return m ? [m[1] + "\u043E" + m[2], m[1] + "\u0435" + m[2]] : [];
+    }
+    module2.exports = {
+      id: "uk",
+      name: "Ukrainian",
+      priority: 0,
+      match: (word) => /[а-яіїєґ]/i.test(word),
+      keys(word, mode) {
+        const w = word.toLowerCase();
+        if (mode === "exact")
+          return [w];
+        if (mode === "endingStrip")
+          return [strip(w)];
+        const stem = strip(w);
+        return [.../* @__PURE__ */ new Set([stem, ...alternations(stem)])];
+      },
+      lemma: (word) => strip(word)
     };
   }
 });
@@ -680,6 +766,7 @@ var require_builtin_languages = __commonJS({
     "use strict";
     module2.exports = [
       require_ru(),
+      require_uk(),
       require_en(),
       require_es(),
       require_de(),
@@ -688,11 +775,86 @@ var require_builtin_languages = __commonJS({
   }
 });
 
+// src/language-api.js
+var require_language_api = __commonJS({
+  "src/language-api.js"(exports2, module2) {
+    "use strict";
+    var MATCH_MODES = ["stemmer", "endingStrip", "exact"];
+    var ID_PATTERN = /^[a-z][a-z0-9-]*$/;
+    function validateLanguage2(lang) {
+      if (!lang || typeof lang !== "object")
+        return "module does not export an object";
+      if (typeof lang.id !== "string" || !ID_PATTERN.test(lang.id))
+        return 'invalid "id" (expected a lowercase code like "en")';
+      if (typeof lang.name !== "string" || !lang.name.trim())
+        return 'missing "name"';
+      if ("priority" in lang && typeof lang.priority !== "number")
+        return '"priority" must be a number';
+      if (typeof lang.match !== "function")
+        return "missing match(word) function";
+      if (typeof lang.keys !== "function")
+        return "missing keys(word, mode) function";
+      if ("lemma" in lang && typeof lang.lemma !== "function")
+        return '"lemma" must be a function';
+      const sample = lang.id;
+      try {
+        lang.match(sample);
+      } catch (e) {
+        return `match() threw: ${e && e.message || e}`;
+      }
+      for (const mode of MATCH_MODES) {
+        let out;
+        try {
+          out = lang.keys(sample, mode);
+        } catch (e) {
+          return `keys() threw in mode "${mode}": ${e && e.message || e}`;
+        }
+        if (!Array.isArray(out) || !out.length || out.some((k) => typeof k !== "string")) {
+          return `keys() must return a non-empty array of strings (mode "${mode}")`;
+        }
+      }
+      return null;
+    }
+    module2.exports = { MATCH_MODES, ID_PATTERN, validateLanguage: validateLanguage2 };
+  }
+});
+
+// src/folder-suggest.js
+var require_folder_suggest = __commonJS({
+  "src/folder-suggest.js"(exports2, module2) {
+    "use strict";
+    var obsidian = require("obsidian");
+    var { AbstractInputSuggest, TFolder } = obsidian;
+    var FolderSuggest = class extends AbstractInputSuggest {
+      constructor(app, inputEl) {
+        super(app, inputEl);
+        this.inputEl = inputEl;
+      }
+      getSuggestions(query) {
+        const q = query.toLowerCase();
+        return this.app.vault.getAllLoadedFiles().filter((f) => f instanceof TFolder && f.path.toLowerCase().includes(q));
+      }
+      renderSuggestion(folder, el) {
+        el.setText(folder.path || "/");
+      }
+      selectSuggestion(folder) {
+        this.setValue(folder.path);
+        this.inputEl.trigger("input");
+        this.close();
+      }
+    };
+    var folderSuggestAvailable = () => typeof AbstractInputSuggest === "function";
+    module2.exports = { FolderSuggest, folderSuggestAvailable };
+  }
+});
+
 // src/settings-tab.js
 var require_settings_tab = __commonJS({
   "src/settings-tab.js"(exports2, module2) {
     "use strict";
     var { PluginSettingTab, Setting, Notice: Notice2 } = require("obsidian");
+    var { sanitizeFolder: sanitizeFolder2 } = require_constants();
+    var { FolderSuggest, folderSuggestAvailable } = require_folder_suggest();
     var GlossaryLinkerSettingTab2 = class extends PluginSettingTab {
       constructor(app, plugin) {
         super(app, plugin);
@@ -708,11 +870,18 @@ var require_settings_tab = __commonJS({
             this.plugin.rebuildIndex();
         };
         containerEl.createEl("h3", { text: "Scope" });
-        new Setting(containerEl).setName("Glossary folder").setDesc(`Folder with one note per term (file name = term title). Both this folder's notes and their frontmatter "aliases" build the term index. Path is relative to the vault root.`).addText((t) => t.setValue(s.glossaryFolder).onChange(async (v) => {
-          s.glossaryFolder = v.trim();
-          await save(true);
-        }));
-        new Setting(containerEl).setName("Link scope").setDesc('Which notes the plugin highlights terms in and turns them into links. "Listed folders only" restricts to the folders below; "Everywhere except listed" covers the vault but skips the folders below; "Everywhere" covers the whole vault. The always-excluded folders below are removed on top of all three.').addDropdown((d) => d.addOption("folders", "Listed folders only").addOption("except", "Everywhere except listed").addOption("vault", "Everywhere").setValue(s.scopeMode).onChange(async (v) => {
+        new Setting(containerEl).setName("Glossary folder").setDesc("Folder with one note per term (file name = the term title).").addText((t) => {
+          t.setValue(s.glossaryFolder).onChange(async (v) => {
+            s.glossaryFolder = sanitizeFolder2(v);
+            await save(true);
+            this.renderFolderStatus();
+          });
+          if (folderSuggestAvailable())
+            new FolderSuggest(this.app, t.inputEl);
+        });
+        this.folderStatusEl = containerEl.createEl("div", { cls: "glossary-section-desc" });
+        this.renderFolderStatus();
+        new Setting(containerEl).setName("Link scope").setDesc("Which notes terms are highlighted and linked in.").addDropdown((d) => d.addOption("folders", "Listed folders only").addOption("except", "Everywhere except listed").addOption("vault", "Everywhere").setValue(s.scopeMode).onChange(async (v) => {
           s.scopeMode = v;
           await save(false);
           this.display();
@@ -726,7 +895,7 @@ var require_settings_tab = __commonJS({
             t.inputEl.rows = 5;
           });
         }
-        new Setting(containerEl).setName("Always-excluded folders").setDesc("One folder path per line. Never highlighted, linked or scanned, whatever the mode above is. A good place for the .obsidian config folder and attachment folders.").addTextArea((t) => {
+        new Setting(containerEl).setName("Always-excluded folders").setDesc("One folder path per line, never highlighted, linked or scanned, whatever the mode above is.").addTextArea((t) => {
           t.setValue(s.excludeFolders).onChange(async (v) => {
             s.excludeFolders = v;
             await save(false);
@@ -734,7 +903,7 @@ var require_settings_tab = __commonJS({
           t.inputEl.rows = 3;
         });
         containerEl.createEl("h3", { text: "Matching" });
-        new Setting(containerEl).setName("Morphology").setDesc(`How an inflected word in the text is matched to a term. The actual algorithm comes from the enabled language modules below, picked automatically by the word's script. "Stemmer" reduces words to their root (handles declensions and plurals like units \u2192 unit) and is recommended. "Ending strip" only chops common endings (lighter, fewer matches). "Exact match" requires the exact term/alias spelling.`).addDropdown((d) => d.addOption("stemmer", "Stemmer (recommended)").addOption("endingStrip", "Ending strip").addOption("exact", "Exact match").setValue(s.matchMode).onChange(async (v) => {
+        new Setting(containerEl).setName("Morphology").setDesc("How an inflected word is matched to a term.").addDropdown((d) => d.addOption("stemmer", "Stemmer (recommended)").addOption("endingStrip", "Ending strip").addOption("exact", "Exact match").setValue(s.matchMode).onChange(async (v) => {
           s.matchMode = v;
           await save(true);
         }));
@@ -743,54 +912,49 @@ var require_settings_tab = __commonJS({
         const enabledCount = langs.filter((l) => (s.enabledLanguages || []).includes(l.id)).length;
         if (this.showLanguages === void 0)
           this.showLanguages = false;
-        const langDesc = `Morphology modules in the "languages" folder \u2014 ${enabledCount} of ${langs.length} enabled` + (errors.length ? `, ${errors.length} with errors` : "") + ". Disabled languages are matched exactly (no inflection).";
-        new Setting(containerEl).setName("Languages").setDesc(langDesc).addExtraButton((b) => b.setIcon("refresh-cw").setTooltip("Reload \u2014 re-scan the languages folder").onClick(async () => {
-          await this.plugin.loadLanguages();
-          this.plugin.rebuildIndex();
-          this.display();
-        })).addExtraButton((b) => b.setIcon(this.showLanguages ? "chevron-up" : "chevron-down").setTooltip(this.showLanguages ? "Hide languages" : "Show languages").onClick(() => {
+        const langDesc = `Bundled morphology modules \u2014 ${enabledCount} of ${langs.length} enabled` + (errors.length ? `, ${errors.length} invalid` : "") + ".";
+        new Setting(containerEl).setName("Languages").setDesc(langDesc).addExtraButton((b) => b.setIcon(this.showLanguages ? "chevron-up" : "chevron-down").setTooltip(this.showLanguages ? "Hide languages" : "Show languages").onClick(() => {
           this.showLanguages = !this.showLanguages;
           this.display();
         }));
-        if (!langs.length && !errors.length) {
-          containerEl.createEl("div", { cls: "glossary-preview-empty", text: "No language modules found." });
-        }
         if (this.showLanguages) {
-          for (const lang of langs) {
-            const row = new Setting(containerEl).setName(lang.name).setDesc(`id: ${lang.id}`).addToggle((t) => t.setValue((s.enabledLanguages || []).includes(lang.id)).onChange(async (v) => {
+          langs.forEach((lang, i) => {
+            const row = new Setting(containerEl).setName(lang.name).setDesc(`id: ${lang.id}`).addExtraButton((b) => b.setIcon("chevron-up").setTooltip("Higher priority").setDisabled(i === 0).onClick(async () => {
+              this.plugin.moveLanguage(lang.id, -1);
+              await this.applyLanguageChange();
+            })).addExtraButton((b) => b.setIcon("chevron-down").setTooltip("Lower priority").setDisabled(i === langs.length - 1).onClick(async () => {
+              this.plugin.moveLanguage(lang.id, 1);
+              await this.applyLanguageChange();
+            })).addToggle((t) => t.setValue((s.enabledLanguages || []).includes(lang.id)).onChange(async (v) => {
               const set = new Set(s.enabledLanguages || []);
               if (v)
                 set.add(lang.id);
               else
                 set.delete(lang.id);
               s.enabledLanguages = [...set];
-              await this.plugin.saveSettings();
-              this.plugin.refreshActiveLanguages();
-              this.plugin.rebuildIndex();
-              this.plugin.rerenderViews();
-              this.display();
+              await this.applyLanguageChange();
             }));
             row.settingEl.addClass("glossary-lang-row");
-          }
+          });
           for (const bad of errors) {
-            const row = new Setting(containerEl).setName(bad.file).setDesc(`Invalid module: ${bad.error}`).addExtraButton((b) => b.setIcon("alert-triangle").setTooltip(`Invalid module: ${bad.error}`).setDisabled(true));
+            const row = new Setting(containerEl).setName(bad.id).setDesc(`Invalid module: ${bad.error}`).addExtraButton((b) => b.setIcon("alert-triangle").setTooltip(`Invalid module: ${bad.error}`).setDisabled(true));
             row.nameEl.addClass("glossary-lang-error");
             row.settingEl.addClass("glossary-lang-row");
             row.settingEl.addClass("mod-warning");
           }
         }
-        new Setting(containerEl).setName("Link first occurrence only").setDesc("When turning terms into links, link only the first occurrence of each term on a page and leave the rest as plain text. Off = link every occurrence.").addToggle((t) => t.setValue(s.linkFirstOnly).onChange(async (v) => {
+        new Setting(containerEl).setName("Link first occurrence only").setDesc("When turning terms into links, link only the first occurrence of each term on a page.").addToggle((t) => t.setValue(s.linkFirstOnly).onChange(async (v) => {
           s.linkFirstOnly = v;
           await save(false);
         }));
-        new Setting(containerEl).setName("Excluded terms").setDesc("Term titles, one per line. These glossary terms are dropped from the index entirely \u2014 never highlighted or linked anywhere.").addTextArea((t) => {
+        new Setting(containerEl).setName("Excluded terms").setDesc("Term titles or aliases, one per line \u2014 drops the whole matching entry from the index.").addTextArea((t) => {
           t.setValue(s.excludeTerms).onChange(async (v) => {
             s.excludeTerms = v;
             await save(true);
           });
           t.inputEl.rows = 3;
         });
-        new Setting(containerEl).setName("Excluded words").setDesc('Surface words, one per line. These words (and their inflections) never trigger a link, even if they match a term \u2014 useful for homonyms (e.g. a common word "lead" that collides with a term "Lead").').addTextArea((t) => {
+        new Setting(containerEl).setName("Excluded words").setDesc("Surface words, one per line, that never trigger a link even if they match a term.").addTextArea((t) => {
           t.setValue(s.excludeWords).onChange(async (v) => {
             s.excludeWords = v;
             await save(true);
@@ -798,36 +962,46 @@ var require_settings_tab = __commonJS({
           t.inputEl.rows = 3;
         });
         containerEl.createEl("h3", { text: "Highlighting" });
-        new Setting(containerEl).setName("Highlight in Reading view").setDesc("In the fully-rendered Reading view, underline detected terms as clickable links (the note text on disk is not changed). They behave like real internal links: hover shows a page preview (per your Page Preview settings), click opens the note, right-click opens the actions menu.").addToggle((t) => t.setValue(s.highlightInReading).onChange(async (v) => {
+        new Setting(containerEl).setName("Highlight in Reading view").setDesc("Underline detected terms as clickable links in Reading view (file unchanged).").addToggle((t) => t.setValue(s.highlightInReading).onChange(async (v) => {
           s.highlightInReading = v;
           await save(false);
           this.plugin.rerenderViews();
         }));
-        new Setting(containerEl).setName("Highlight while editing").setDesc('Underline terms in the editor (Live Preview / Source view) too, not just in Reading view. "Live" updates as you type; "On save" updates a moment after you stop typing (less flicker); "Off" leaves the editor unhighlighted. Takes effect immediately, no reload needed.').addDropdown((d) => d.addOption("off", "Off").addOption("live", "Live (as you type)").addOption("onSave", "On save").setValue(s.editingHighlight).onChange(async (v) => {
+        new Setting(containerEl).setName("Highlight while editing").setDesc("Underline terms in the editor (Live Preview / Source) too.").addDropdown((d) => d.addOption("off", "Off").addOption("live", "Live (as you type)").addOption("onSave", "On save").setValue(s.editingHighlight).onChange(async (v) => {
           s.editingHighlight = v;
           await save(false);
           this.plugin.refreshEditors();
         }));
-        new Setting(containerEl).setName("Skip headings").setDesc("Do not highlight or turn into links any terms that appear inside Markdown headings (lines starting with #). On = headings are left untouched.").addToggle((t) => t.setValue(s.skipHeadings).onChange(async (v) => {
+        new Setting(containerEl).setName("Skip headings").setDesc("Do not highlight or link terms that appear inside Markdown headings.").addToggle((t) => t.setValue(s.skipHeadings).onChange(async (v) => {
           s.skipHeadings = v;
           await save(false);
           this.plugin.rerenderViews();
         }));
+        new Setting(containerEl).setName("Status bar count").setDesc("Show how many glossary terms are on the current note in the status bar.").addToggle((t) => t.setValue(s.statusBar).onChange(async (v) => {
+          s.statusBar = v;
+          await save(false);
+          this.plugin.updateStatusBar();
+        }));
+        new Setting(containerEl).setName("Count direct links").setDesc("Also count terms already linked directly, not only plain-text mentions.").addToggle((t) => t.setValue(s.statusBarIncludeLinks).onChange(async (v) => {
+          s.statusBarIncludeLinks = v;
+          await save(false);
+          this.plugin.updateStatusBar();
+        }));
         containerEl.createEl("h3", { text: "Collecting aliases" });
         containerEl.createEl("div", { cls: "glossary-section-desc", text: "Reads the links you already made by hand, like [[Term|some wording]], and adds that wording to the term's aliases \u2014 so the same wording links automatically next time." });
-        new Setting(containerEl).setName("Alias form").setDesc('How the link text is stored as an alias. "Base form" reduces it to a dictionary form first, so one alias covers many word forms (link text "boxes" is stored as "box"). "As written" stores the exact text ("boxes"). "Both" stores both.').addDropdown((d) => d.addOption("lemma", "Base form").addOption("literal", "As written").addOption("both", "Both").setValue(s.aliasHarvestMode).onChange(async (v) => {
+        new Setting(containerEl).setName("Alias form").setDesc("How collected link text is stored as an alias.").addDropdown((d) => d.addOption("lemma", "Base form").addOption("literal", "As written").addOption("both", "Both").setValue(s.aliasHarvestMode).onChange(async (v) => {
           s.aliasHarvestMode = v;
           await save(false);
         }));
-        new Setting(containerEl).setName("Collect on save").setDesc('Collect aliases automatically when a note is saved (with a short delay). "Silent" adds new aliases without asking; "Ask first" shows a preview to confirm; "Off" = only via the commands.').addDropdown((d) => d.addOption("off", "Off").addOption("silent", "Silent (add automatically)").addOption("preview", "Ask first").setValue(s.harvestOnSave).onChange(async (v) => {
+        new Setting(containerEl).setName("Collect on save").setDesc("Collect aliases automatically when a note is saved.").addDropdown((d) => d.addOption("off", "Off").addOption("silent", "Silent (add automatically)").addOption("preview", "Ask first").setValue(s.harvestOnSave).onChange(async (v) => {
           s.harvestOnSave = v;
           await save(false);
         }));
-        new Setting(containerEl).setName("Single-word aliases only").setDesc("Only collect link texts that are a single word. On = skip multi-word link text, which reduces to a base form poorly. Off = also collect multi-word texts as written.").addToggle((t) => t.setValue(s.harvestSingleWordOnly).onChange(async (v) => {
+        new Setting(containerEl).setName("Single-word aliases only").setDesc("Only collect link texts that are a single word.").addToggle((t) => t.setValue(s.harvestSingleWordOnly).onChange(async (v) => {
           s.harvestSingleWordOnly = v;
           await save(false);
         }));
-        new Setting(containerEl).setName("Minimum alias length").setDesc("Ignore collected aliases shorter than this many characters (avoids noise from 1\u20132 letter fragments).").addText((t) => {
+        new Setting(containerEl).setName("Minimum alias length").setDesc("Ignore collected aliases shorter than this many characters.").addText((t) => {
           t.inputEl.type = "number";
           t.inputEl.min = "1";
           t.setValue(String(s.harvestMinLength)).onChange(async (v) => {
@@ -836,11 +1010,57 @@ var require_settings_tab = __commonJS({
             await save(false);
           });
         });
+        containerEl.createEl("h3", { text: "Context menu" });
+        new Setting(containerEl).setName('"Turn into links" items').setDesc('Show the "Turn into link" / "Turn all \u2026 into links" actions when right-clicking a highlighted term.').addToggle((t) => t.setValue(s.menuTurnInto).onChange(async (v) => {
+          s.menuTurnInto = v;
+          await save(false);
+        }));
+        new Setting(containerEl).setName('"Collect aliases" item').setDesc('Show "Collect aliases from links (this note)" in the editor right-click menu.').addToggle((t) => t.setValue(s.menuCollect).onChange(async (v) => {
+          s.menuCollect = v;
+          await save(false);
+        }));
+        new Setting(containerEl).setName('"Exclude word / term" items').setDesc('Show "Add \u2026 to excluded words / terms" when right-clicking a term, and "Add \u2026 to excluded words" on a selected word.').addToggle((t) => t.setValue(s.menuExclude).onChange(async (v) => {
+          s.menuExclude = v;
+          await save(false);
+        }));
+        new Setting(containerEl).setName('"Open glossary note" items').setDesc('Show "Open glossary note" / "Open in new tab" when right-clicking a highlighted term.').addToggle((t) => t.setValue(s.menuOpen).onChange(async (v) => {
+          s.menuOpen = v;
+          await save(false);
+        }));
+        new Setting(containerEl).setName('"Create term from selection" items').setDesc('Show the "Glossary: create term\u2026" actions when right-clicking a plain text selection.').addToggle((t) => t.setValue(s.menuCreateTerm).onChange(async (v) => {
+          s.menuCreateTerm = v;
+          await save(false);
+        }));
         containerEl.createEl("h3", { text: "Maintenance" });
-        new Setting(containerEl).setName("Rebuild glossary index").setDesc("Re-scan the glossary folder now. The index also rebuilds automatically when glossary notes change.").addButton((b) => b.setButtonText("Rebuild").onClick(() => {
+        new Setting(containerEl).setName("Rebuild glossary index").setDesc("Re-scan the glossary folder now.").addButton((b) => b.setButtonText("Rebuild").onClick(() => {
           this.plugin.rebuildIndex();
           new Notice2("Glossary Linker: index rebuilt");
+          this.renderFolderStatus();
         }));
+      }
+      async applyLanguageChange() {
+        await this.plugin.saveSettings();
+        this.plugin.refreshActiveLanguages();
+        this.plugin.rebuildIndex();
+        this.plugin.rerenderViews();
+        this.display();
+      }
+      renderFolderStatus() {
+        const el = this.folderStatusEl;
+        if (!el)
+          return;
+        el.empty();
+        el.removeClass("glossary-lang-error");
+        const path = (this.plugin.settings.glossaryFolder || "").replace(/\/+$/, "");
+        const f = path ? this.app.vault.getAbstractFileByPath(path) : null;
+        const isFolder = !!f && f.children !== void 0;
+        if (!isFolder) {
+          el.addClass("glossary-lang-error");
+          el.setText("\u26A0 Folder not found \u2014 no terms will be indexed.");
+          return;
+        }
+        const n = this.plugin.index && this.plugin.index.termCount || 0;
+        el.setText(`${n} term${n === 1 ? "" : "s"} indexed.`);
       }
     };
     module2.exports = { GlossaryLinkerSettingTab: GlossaryLinkerSettingTab2 };
@@ -853,10 +1073,15 @@ var require_matcher = __commonJS({
     "use strict";
     var { splitLines: splitLines2 } = require_constants();
     module2.exports = {
-      // Match keys for a word: the union of keys from every enabled language that
-      // claims it (same-script languages overlap, e.g. en/es/de/fr on Latin).
-      // Unknown scripts fall back to the lowercased exact form.
+      // Keys for a word: the union from every language that claims it (same-script
+      // languages overlap); words no language claims fall back to the exact form.
       keysFor(word) {
+        const cacheKey = word.toLowerCase();
+        if (!this.keysCache)
+          this.keysCache = /* @__PURE__ */ new Map();
+        const cached = this.keysCache.get(cacheKey);
+        if (cached)
+          return cached;
         const out = [];
         const seen = /* @__PURE__ */ new Set();
         for (const lang of this.activeLanguages) {
@@ -870,7 +1095,8 @@ var require_matcher = __commonJS({
           }
         }
         if (!out.length)
-          out.push(word.toLowerCase());
+          out.push(cacheKey);
+        this.keysCache.set(cacheKey, out);
         return out;
       },
       // Base form for collected aliases: the first claiming language wins (by priority).
@@ -886,7 +1112,9 @@ var require_matcher = __commonJS({
         return words.map((raw) => ({ raw, lower: raw.toLowerCase(), keys: this.keysFor(raw) }));
       },
       rebuildIndex() {
+        this.keysCache = /* @__PURE__ */ new Map();
         const byKey = /* @__PURE__ */ new Map();
+        const canonicals = /* @__PURE__ */ new Set();
         const excludeTerms = new Set(splitLines2(this.settings.excludeTerms).map((s) => s.toLowerCase()));
         this.excludeWordKeys = /* @__PURE__ */ new Set();
         for (const w of splitLines2(this.settings.excludeWords)) {
@@ -896,10 +1124,12 @@ var require_matcher = __commonJS({
         const files = this.app.vault.getMarkdownFiles().filter((f) => this.isGlossaryFile(f));
         for (const file of files) {
           const canonical = file.basename;
-          if (excludeTerms.has(canonical.toLowerCase()))
+          const aliases = this.aliasesOf(file);
+          if ([canonical, ...aliases].some((f) => excludeTerms.has(f.toLowerCase())))
             continue;
-          const forms = [canonical, ...this.aliasesOf(file)].filter((x) => typeof x === "string" && x.trim());
+          const forms = [canonical, ...aliases].filter((x) => typeof x === "string" && x.trim());
           const target = { canonical, path: file.path };
+          canonicals.add(canonical);
           for (const form of forms) {
             const words = this.tokenizeForm(form);
             if (!words.length)
@@ -914,7 +1144,7 @@ var require_matcher = __commonJS({
             }
           }
         }
-        this.index = { byKey };
+        this.index = { byKey, termCount: canonicals.size };
       },
       findMatches(text, currentCanonical, opts = {}) {
         const protect = opts.protect ? this.computeProtected(text) : null;
@@ -939,32 +1169,31 @@ var require_matcher = __commonJS({
               }
             }
           }
-          let matched = null;
-          if (cands.length) {
-            const sorted = cands.length > 1 ? cands.slice().sort((a, b) => b.wordCount - a.wordCount) : cands;
-            for (const c of sorted) {
-              const wc = c.wordCount;
-              if (i + wc > tokens.length)
-                continue;
-              let ok = true;
-              for (let k = 0; k < wc; k++) {
-                const t2 = tokens[i + k];
-                const w = c.words[k];
-                if (k > 0) {
-                  const between = text.slice(tokens[i + k - 1].end, t2.start);
-                  if (/[^\s-]/.test(between)) {
-                    ok = false;
-                    break;
-                  }
-                }
-                const t2keys = k === 0 ? t2.keys : this.keysFor(t2.raw);
-                if (!t2keys.some((kk) => w.keys.includes(kk))) {
-                  ok = false;
-                  break;
-                }
+          const fits = (c) => {
+            const wc = c.wordCount;
+            if (i + wc > tokens.length)
+              return false;
+            for (let k = 0; k < wc; k++) {
+              const t2 = tokens[i + k];
+              const w = c.words[k];
+              if (k > 0) {
+                const between = text.slice(tokens[i + k - 1].end, t2.start);
+                if (/[^\s-]/.test(between))
+                  return false;
               }
-              if (ok) {
-                matched = { c, start: tokens[i].start, end: tokens[i + wc - 1].end, wc };
+              const t2keys = k === 0 ? t2.keys : this.keysFor(t2.raw);
+              if (!t2keys.some((kk) => w.keys.includes(kk)))
+                return false;
+            }
+            return true;
+          };
+          let matched = null;
+          let sorted = null;
+          if (cands.length) {
+            sorted = cands.length > 1 ? cands.slice().sort((a, b) => b.wordCount - a.wordCount) : cands;
+            for (const c of sorted) {
+              if (fits(c)) {
+                matched = { c, start: tokens[i].start, end: tokens[i + c.wordCount - 1].end, wc: c.wordCount };
                 break;
               }
             }
@@ -973,11 +1202,24 @@ var require_matcher = __commonJS({
             const oneWordExcluded = matched.wc === 1 && tk.keys.some((k) => this.excludeWordKeys.has(k));
             const inProtected = protect && this.overlapsProtected(protect, matched.start, matched.end);
             if (!oneWordExcluded && !inProtected) {
+              let alts = null;
+              if (sorted.length > 1) {
+                const seenCanon = /* @__PURE__ */ new Set([matched.c.canonical]);
+                for (const c of sorted) {
+                  if (c.wordCount !== matched.wc || seenCanon.has(c.canonical))
+                    continue;
+                  if (fits(c)) {
+                    seenCanon.add(c.canonical);
+                    (alts || (alts = [])).push(c.canonical);
+                  }
+                }
+              }
               results.push({
                 start: matched.start,
                 end: matched.end,
                 canonical: matched.c.canonical,
-                display: text.slice(matched.start, matched.end)
+                display: text.slice(matched.start, matched.end),
+                alts
               });
               i += matched.wc;
               continue;
@@ -1076,13 +1318,20 @@ var require_highlight = __commonJS({
           a.textContent = display;
           a.href = canonical;
           a.setAttribute("data-href", canonical);
-          a.setAttribute("target", "_blank");
-          a.setAttribute("rel", "noopener nofollow");
+          if (m.alts && m.alts.length)
+            a.title = "Glossary: also matches " + m.alts.join(", ");
           a.addEventListener("contextmenu", (e) => {
-            e.preventDefault();
-            e.stopPropagation();
             const file = sourcePath ? this.app.vault.getAbstractFileByPath(sourcePath) : null;
-            this.showLinkMenu(e, canonical, display, file, null);
+            const root = a.closest(".markdown-reading-view, .markdown-source-view, .markdown-preview-view") || a.ownerDocument;
+            let occurrence = 0;
+            for (const other of root.querySelectorAll("a.glossary-link")) {
+              if (other === a)
+                break;
+              if (other.getAttribute("data-href") === canonical && other.textContent === display)
+                occurrence++;
+            }
+            if (this.showLinkMenu(e, canonical, display, file, null, occurrence))
+              e.stopPropagation();
           });
           frag.appendChild(a);
           cursor = m.end;
@@ -1091,8 +1340,8 @@ var require_highlight = __commonJS({
           frag.appendChild(document.createTextNode(text.slice(cursor)));
         node.parentNode.replaceChild(frag, node);
       },
-      // Highlight in the editor (Live Preview / Source). Always registered; the
-      // editingHighlight setting controls whether and how often it recomputes.
+      // Editor highlight (Live Preview / Source). Always registered; the
+      // editingHighlight setting controls if and how often it recomputes.
       registerEditingHighlight() {
         let view, state, language;
         try {
@@ -1118,6 +1367,10 @@ var require_highlight = __commonJS({
           }
           return m;
         };
+        const markWithAlts = (canonical, alts) => Decoration.mark({
+          class: "cm-glossary-link",
+          attributes: { "data-glossary-target": canonical, title: "Glossary: also matches " + alts.join(", ") }
+        });
         const skipNode = (name) => /code|link|url|header|hashtag|frontmatter|comment|tag|escape/i.test(name);
         const buildDeco = (editorView) => {
           const builder = new RangeSetBuilder();
@@ -1134,7 +1387,7 @@ var require_highlight = __commonJS({
                   skip = true;
               } });
               if (!skip)
-                builder.add(start, end, markFor(m.canonical));
+                builder.add(start, end, m.alts && m.alts.length ? markWithAlts(m.canonical, m.alts) : markFor(m.canonical));
             }
           }
           return builder.finish();
@@ -1166,10 +1419,18 @@ var require_highlight = __commonJS({
             eventHandlers: {
               mousedown(e) {
                 const el = targetEl(e);
-                if (!el || e.button !== 0)
+                if (!el)
                   return;
                 const file = plugin.app.workspace.getActiveFile();
-                plugin.openTerm(canonicalOf(el), file ? file.path : "", e.ctrlKey || e.metaKey);
+                const sourcePath = file ? file.path : "";
+                if (e.button === 1) {
+                  plugin.openTerm(canonicalOf(el), sourcePath, true);
+                  e.preventDefault();
+                  return;
+                }
+                if (e.button !== 0 || !(e.ctrlKey || e.metaKey))
+                  return;
+                plugin.openTerm(canonicalOf(el), sourcePath, false);
                 e.preventDefault();
               },
               mouseover(e) {
@@ -1183,15 +1444,8 @@ var require_highlight = __commonJS({
                 const el = targetEl(e);
                 if (!el)
                   return;
-                const pos = view2.posAtCoords({ x: e.clientX, y: e.clientY });
-                if (pos == null)
-                  return;
                 const file = plugin.app.workspace.getActiveFile();
-                const match = plugin.findMatches(view2.state.doc.toString(), plugin.activeCanonical(), { protect: true }).find((m) => pos >= m.start && pos < m.end);
-                if (!match)
-                  return;
-                e.preventDefault();
-                plugin.showLinkMenu(e, match.canonical, match.display, file, match.start);
+                plugin.showLinkMenu(e, canonicalOf(el), el.textContent, file, view2.posAtDOM(el));
               }
             }
           }
@@ -1308,16 +1562,21 @@ var require_actions = __commonJS({
           new Notice2("No active note");
           return;
         }
-        const text = await this.app.vault.read(file);
+        const text = await this.app.vault.cachedRead(file);
         const { newText, changes } = this.buildMaterialization(text, this.canonicalForPath(file.path));
         if (!changes.length) {
           new Notice2("Glossary Linker: no matches found");
           return;
         }
-        new MaterializePreviewModal(this.app, [{ file, newText, changes }], async (files) => {
-          for (const f of files)
-            await this.app.vault.modify(f.file, f.newText);
-          new Notice2(`Glossary Linker: ${changes.length} link(s) created`);
+        new MaterializePreviewModal(this.app, [{ file, original: text, newText, changes }], async (files) => {
+          const f = files[0];
+          if (await this.app.vault.read(f.file) !== f.original) {
+            new Notice2("Glossary Linker: note changed since preview, nothing written");
+            return;
+          }
+          await this.app.vault.modify(f.file, f.newText);
+          new Notice2(`Glossary Linker: ${f.changes.length} link(s) created`);
+          this.updateStatusBar();
         }).open();
       },
       materializeSelection(editor) {
@@ -1337,41 +1596,136 @@ var require_actions = __commonJS({
           new Notice2(`Glossary Linker: ${changes.length} link(s) created`);
         }).open();
       },
-      async materializeScope() {
+      // Scan in-scope notes with compute(text, file) -> { newText, changes }, keeping
+      // only files that changed, with a progress notice.
+      async scanScope(compute) {
         const files = this.getScopeFiles();
         const fileChanges = [];
-        for (const file of files) {
-          const text = await this.app.vault.read(file);
-          const { newText, changes } = this.buildMaterialization(text, this.canonicalForPath(file.path));
-          if (changes.length)
-            fileChanges.push({ file, newText, changes });
+        const notice = new Notice2("Glossary Linker: scanning\u2026", 0);
+        try {
+          for (let i = 0; i < files.length; i++) {
+            if (i % 25 === 0)
+              notice.setMessage(`Glossary Linker: scanning ${i + 1}/${files.length}\u2026`);
+            const file = files[i];
+            const text = await this.app.vault.cachedRead(file);
+            const { newText, changes } = compute(text, file);
+            if (changes.length)
+              fileChanges.push({ file, original: text, newText, changes });
+          }
+        } finally {
+          notice.hide();
         }
+        return fileChanges;
+      },
+      previewMaterialization(fileChanges) {
+        new MaterializePreviewModal(this.app, fileChanges, async (selected) => {
+          let total = 0;
+          let skipped = 0;
+          for (const f of selected) {
+            if (await this.app.vault.read(f.file) !== f.original) {
+              skipped++;
+              continue;
+            }
+            await this.app.vault.modify(f.file, f.newText);
+            total += f.changes.length;
+          }
+          let msg = `Glossary Linker: ${selected.length - skipped} file(s), ${total} link(s)`;
+          if (skipped)
+            msg += `, ${skipped} skipped (changed since preview)`;
+          new Notice2(msg);
+          this.updateStatusBar();
+        }).open();
+      },
+      async materializeScope() {
+        const fileChanges = await this.scanScope((text, file) => this.buildMaterialization(text, this.canonicalForPath(file.path)));
         if (!fileChanges.length) {
           new Notice2("Glossary Linker: no matches found");
           return;
         }
-        new MaterializePreviewModal(this.app, fileChanges, async (selected) => {
-          let total = 0;
-          for (const f of selected) {
-            await this.app.vault.modify(f.file, f.newText);
-            total += f.changes.length;
-          }
-          new Notice2(`Glossary Linker: ${selected.length} file(s), ${total} link(s)`);
-        }).open();
+        this.previewMaterialization(fileChanges);
       },
-      showLinkMenu(evt, canonical, display, file, nearOffset) {
-        const menu = new Menu();
-        if (file) {
-          menu.addItem((i) => i.setTitle("Turn into link").setIcon("link").onClick(() => this.materializeSingle(file, canonical, display, nearOffset)));
-          menu.addItem((i) => i.setTitle(`Turn all "${canonical}" into links`).setIcon("links-coming-in").onClick(() => this.materializeTerm(file, canonical)));
-          menu.addSeparator();
+      async createTermFromSelection(editor, replaceWithLink) {
+        const sel = (editor.getSelection() || "").trim();
+        if (!sel) {
+          new Notice2("Glossary Linker: nothing selected");
+          return;
         }
-        const sourcePath = file ? file.path : "";
-        menu.addItem((i) => i.setTitle("Open glossary note").setIcon("file-text").onClick(() => this.openTerm(canonical, sourcePath, false)));
-        menu.addItem((i) => i.setTitle("Open in new tab").setIcon("file-plus").onClick(() => this.openTerm(canonical, sourcePath, true)));
-        menu.showAtMouseEvent(evt);
+        const name = sel.replace(/[\\/:*?"<>|#^\[\]]/g, "").replace(/\s+/g, " ").trim();
+        if (!name) {
+          new Notice2("Glossary Linker: selection is not a valid term name");
+          return;
+        }
+        await this.ensureGlossaryFolder();
+        const folder = this.settings.glossaryFolder.replace(/\/+$/, "");
+        const path = folder ? `${folder}/${name}.md` : `${name}.md`;
+        let file = this.app.vault.getAbstractFileByPath(path);
+        if (file) {
+          new Notice2(`Glossary Linker: term "${name}" already exists`);
+        } else {
+          try {
+            file = await this.app.vault.create(path, "");
+          } catch (e) {
+            new Notice2("Glossary Linker: could not create term note");
+            return;
+          }
+        }
+        if (replaceWithLink)
+          editor.replaceSelection(this.wikiLink(name, sel));
+        this.rebuildIndex();
+        this.updateStatusBar();
+        await this.app.workspace.getLeaf("tab").openFile(file);
       },
-      async materializeSingle(file, canonical, display, nearOffset) {
+      showLinkMenu(evt, canonical, display, file, nearOffset, occurrence) {
+        const sourcePath = file ? file.path : "";
+        const groups = [];
+        if (file && this.settings.menuTurnInto) {
+          groups.push((menu2) => {
+            menu2.addItem((i) => i.setTitle("Turn into link").setIcon("link").onClick(() => this.materializeSingle(file, canonical, display, nearOffset, occurrence)));
+            menu2.addItem((i) => i.setTitle(`Turn all "${canonical}" into links: this note`).setIcon("links-coming-in").onClick(() => this.materializeTerm(file, canonical)));
+            menu2.addItem((i) => i.setTitle(`Turn all "${canonical}" into links: all notes`).setIcon("links-going-out").onClick(() => this.materializeTermScope(canonical)));
+          });
+        }
+        if (this.settings.menuExclude) {
+          groups.push((menu2) => {
+            menu2.addItem((i) => i.setTitle(`Add "${display}" to excluded words`).setIcon("ban").onClick(() => this.addToExclusion("excludeWords", display.toLowerCase())));
+            menu2.addItem((i) => i.setTitle(`Add "${canonical}" to excluded terms`).setIcon("trash-2").onClick(() => this.addToExclusion("excludeTerms", canonical)));
+          });
+        }
+        if (this.settings.menuOpen) {
+          groups.push((menu2) => {
+            menu2.addItem((i) => i.setTitle("Open glossary note").setIcon("file-text").onClick(() => this.openTerm(canonical, sourcePath, false)));
+            menu2.addItem((i) => i.setTitle("Open in new tab").setIcon("file-plus").onClick(() => this.openTerm(canonical, sourcePath, true)));
+          });
+        }
+        if (!groups.length)
+          return false;
+        const menu = new Menu();
+        groups.forEach((group, i) => {
+          if (i)
+            menu.addSeparator();
+          group(menu);
+        });
+        evt.preventDefault();
+        menu.showAtMouseEvent(evt);
+        return true;
+      },
+      // Append a value to a newline list setting (excludeWords / excludeTerms) and apply it.
+      async addToExclusion(listKey, value) {
+        const lines = (this.settings[listKey] || "").split("\n").map((s) => s.trim()).filter(Boolean);
+        if (lines.some((l) => l.toLowerCase() === value.toLowerCase())) {
+          new Notice2(`Glossary Linker: "${value}" is already excluded`);
+          return;
+        }
+        lines.push(value);
+        this.settings[listKey] = lines.join("\n");
+        await this.saveSettings();
+        this.rebuildIndex();
+        this.rerenderViews();
+        this.updateStatusBar();
+        const where = listKey === "excludeWords" ? "excluded words" : "excluded terms";
+        new Notice2(`Glossary Linker: added "${value}" to ${where}`);
+      },
+      async materializeSingle(file, canonical, display, nearOffset, occurrence) {
         const text = await this.app.vault.read(file);
         const matches = this.findMatches(text, this.canonicalForPath(file.path), { protect: true }).filter((m) => m.canonical === canonical && m.display === display);
         if (!matches.length) {
@@ -1379,12 +1733,15 @@ var require_actions = __commonJS({
           return;
         }
         let target = matches[0];
-        if (nearOffset != null) {
+        if (occurrence != null && matches[occurrence]) {
+          target = matches[occurrence];
+        } else if (nearOffset != null) {
           target = matches.reduce((best, m) => Math.abs(m.start - nearOffset) < Math.abs(best.start - nearOffset) ? m : best, matches[0]);
         }
         const { newText } = this.applyLinks(text, [target]);
         await this.app.vault.modify(file, newText);
         new Notice2("Glossary Linker: link created");
+        this.updateStatusBar();
       },
       async materializeTerm(file, canonical) {
         const text = await this.app.vault.read(file);
@@ -1396,8 +1753,22 @@ var require_actions = __commonJS({
         const { newText } = this.applyLinks(text, matches);
         await this.app.vault.modify(file, newText);
         new Notice2(`Glossary Linker: ${matches.length} link(s) created`);
+        this.updateStatusBar();
       },
-      // Keys and literals of every existing form of a term (to skip what highlighting already matches).
+      async materializeTermScope(canonical) {
+        const fileChanges = await this.scanScope((text, file) => {
+          let matches = this.findMatches(text, this.canonicalForPath(file.path), { protect: true }).filter((m) => m.canonical === canonical);
+          if (this.settings.linkFirstOnly)
+            matches = matches.slice(0, 1);
+          return this.applyLinks(text, matches);
+        });
+        if (!fileChanges.length) {
+          new Notice2("Glossary Linker: no occurrences found");
+          return;
+        }
+        this.previewMaterialization(fileChanges);
+      },
+      // Keys and literals of a term's existing forms, so harvesting can skip what already matches.
       termFormKeys(file) {
         const forms = [file.basename, ...this.aliasesOf(file)].filter((x) => typeof x === "string" && x.trim());
         const keys = /* @__PURE__ */ new Set();
@@ -1485,6 +1856,7 @@ var require_actions = __commonJS({
             });
           }
           this.rebuildIndex();
+          this.updateStatusBar();
           new Notice2(`Glossary Linker: ${total} alias(es) added`);
         };
         if (silent) {
@@ -1499,8 +1871,9 @@ var require_actions = __commonJS({
 
 // src/main.js
 var { Plugin, Notice, debounce } = require("obsidian");
-var { DEFAULT_SETTINGS, splitLines } = require_constants();
+var { DEFAULT_SETTINGS, splitLines, sanitizeFolder } = require_constants();
 var BUILTIN_LANGUAGES = require_builtin_languages();
+var { validateLanguage } = require_language_api();
 var { GlossaryLinkerSettingTab } = require_settings_tab();
 var matcher = require_matcher();
 var highlight = require_highlight();
@@ -1517,18 +1890,30 @@ var GlossaryLinkerPlugin = class extends Plugin {
       if (typeof loaded.highlightInLivePreview === "boolean" && loaded.editingHighlight === void 0)
         this.settings.editingHighlight = loaded.highlightInLivePreview ? "live" : "off";
     }
+    this.settings.glossaryFolder = sanitizeFolder(this.settings.glossaryFolder);
     this.languages = [];
     this.activeLanguages = [];
     this.languageErrors = [];
-    this.index = { byKey: /* @__PURE__ */ new Map() };
+    this.index = { byKey: /* @__PURE__ */ new Map(), termCount: 0 };
     this.excludeWordKeys = /* @__PURE__ */ new Set();
+    this.keysCache = /* @__PURE__ */ new Map();
     await this.loadLanguages();
     this.rebuildIndex();
     this.scheduleRebuild = debounce(() => {
       this.rebuildIndex();
       this.rerenderViews();
+      this.updateStatusBar();
     }, 600, true);
-    this.app.workspace.onLayoutReady(() => this.rebuildIndex());
+    this.statusBarEl = this.addStatusBarItem();
+    this.statusBarEl.addClass("mod-clickable");
+    this.statusBarEl.addEventListener("click", () => this.materializeCurrent());
+    this.updateStatusBarDebounced = debounce(() => this.updateStatusBar(), 400, true);
+    this.registerEvent(this.app.workspace.on("file-open", () => this.updateStatusBarDebounced()));
+    this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.updateStatusBarDebounced()));
+    this.app.workspace.onLayoutReady(() => {
+      this.rebuildIndex();
+      this.updateStatusBar();
+    });
     this.registerEvent(this.app.metadataCache.on("changed", (file) => {
       if (this.isGlossaryPath(file.path))
         this.scheduleRebuild();
@@ -1541,8 +1926,27 @@ var GlossaryLinkerPlugin = class extends Plugin {
         this.harvestOnSaveDebounced(file);
       if (this.settings.editingHighlight === "onSave")
         this.refreshEditors();
+      const active = this.app.workspace.getActiveFile();
+      if (active && active.path === file.path)
+        this.updateStatusBarDebounced();
     }));
-    this.app.workspace.registerHoverLinkSource("glossary-linker", { display: "Glossary Linker", defaultMod: false });
+    this.registerEvent(this.app.workspace.on("editor-menu", (menu, editor) => {
+      const sel = editor.getSelection().trim();
+      const hasSel = !!sel && !sel.includes("\n");
+      if (this.settings.menuCreateTerm && hasSel) {
+        menu.addItem((i) => i.setTitle("Glossary: create term & link").setIcon("plus-circle").onClick(() => this.createTermFromSelection(editor, true)));
+        menu.addItem((i) => i.setTitle("Glossary: create term").setIcon("file-plus").onClick(() => this.createTermFromSelection(editor, false)));
+      }
+      if (this.settings.menuExclude && hasSel) {
+        menu.addItem((i) => i.setTitle(`Glossary: add "${sel}" to excluded words`).setIcon("ban").onClick(() => this.addToExclusion("excludeWords", sel.toLowerCase())));
+      }
+      if (this.settings.menuCollect) {
+        const file = this.app.workspace.getActiveFile();
+        if (file)
+          menu.addItem((i) => i.setTitle("Glossary: collect aliases from links (this note)").setIcon("download").onClick(() => this.harvestFiles([file], false)));
+      }
+    }));
+    this.app.workspace.registerHoverLinkSource("glossary-linker", { display: "Glossary Linker", defaultMod: true });
     this.registerMarkdownPostProcessor((el, ctx) => this.processReadingMode(el, ctx));
     this.registerEditingHighlight();
     this.addCommand({
@@ -1575,6 +1979,11 @@ var GlossaryLinkerPlugin = class extends Plugin {
       callback: () => this.harvestFiles(this.getScopeFiles(), false)
     });
     this.addCommand({
+      id: "create-term-from-selection",
+      name: "Create glossary term from selection",
+      editorCallback: (editor) => this.createTermFromSelection(editor, true)
+    });
+    this.addCommand({
       id: "rebuild-index",
       name: "Rebuild glossary index",
       callback: () => {
@@ -1588,71 +1997,88 @@ var GlossaryLinkerPlugin = class extends Plugin {
     await this.saveData(this.settings);
   }
   async loadLanguages() {
-    this.languages = BUILTIN_LANGUAGES.slice();
+    this.languages = [];
     this.languageErrors = [];
-    const dir = `${this.manifest.dir}/languages`;
-    const adapter = this.app.vault.adapter;
-    const runtimeIds = /* @__PURE__ */ new Set();
-    try {
-      if (await adapter.exists(dir)) {
-        const listed = await adapter.list(dir);
-        for (const path of listed.files) {
-          if (!path.toLowerCase().endsWith(".js"))
-            continue;
-          const file = path.split("/").pop();
-          try {
-            const code = await adapter.read(path);
-            const mod = { exports: {} };
-            const safeRequire = typeof require !== "undefined" ? require : () => ({});
-            new Function("module", "exports", "require", code)(mod, mod.exports, safeRequire);
-            const lang = mod.exports;
-            const problem = this.validateLanguage(lang);
-            if (problem) {
-              this.languageErrors.push({ file, error: problem });
-              continue;
-            }
-            if (runtimeIds.has(lang.id)) {
-              this.languageErrors.push({ file, error: `duplicate id "${lang.id}"` });
-              continue;
-            }
-            runtimeIds.add(lang.id);
-            const idx = this.languages.findIndex((l) => l.id === lang.id);
-            if (idx >= 0)
-              this.languages[idx] = lang;
-            else
-              this.languages.push(lang);
-          } catch (e) {
-            this.languageErrors.push({ file, error: String(e && e.message || e) });
-          }
-        }
+    const seen = /* @__PURE__ */ new Set();
+    for (const lang of BUILTIN_LANGUAGES) {
+      const id = lang && lang.id;
+      const error = validateLanguage(lang);
+      if (error) {
+        this.languageErrors.push({ id: id || "?", error });
+        continue;
       }
-    } catch (e) {
-      console.error("Glossary Linker: cannot list languages folder", e);
+      if (seen.has(id)) {
+        this.languageErrors.push({ id, error: `duplicate id "${id}"` });
+        continue;
+      }
+      seen.add(id);
+      this.languages.push(lang);
     }
-    this.languages.sort((a, b) => (b.priority || 0) - (a.priority || 0) || a.name.localeCompare(b.name));
-    this.languageErrors.sort((a, b) => a.file.localeCompare(b.file));
+    this.sortLanguages();
+    this.languageErrors.sort((a, b) => a.id.localeCompare(b.id));
     if (!Array.isArray(this.settings.enabledLanguages)) {
-      this.settings.enabledLanguages = this.languages.map((l) => l.id);
+      const sys = (window.localStorage.getItem("language") || "").split("-")[0].toLowerCase();
+      const wanted = /* @__PURE__ */ new Set(["en"]);
+      if (sys && this.languages.some((l) => l.id === sys))
+        wanted.add(sys);
+      this.settings.enabledLanguages = this.languages.filter((l) => wanted.has(l.id)).map((l) => l.id);
       await this.saveSettings();
     }
     this.refreshActiveLanguages();
   }
-  validateLanguage(lang) {
-    if (!lang || typeof lang !== "object")
-      return "module does not export an object";
-    if (!lang.id)
-      return 'missing "id"';
-    if (!lang.name)
-      return 'missing "name"';
-    if (typeof lang.match !== "function")
-      return "missing match() function";
-    if (typeof lang.keys !== "function")
-      return "missing keys() function";
-    return null;
+  sortLanguages() {
+    const order = this.settings.languageOrder || [];
+    const rank = (l) => {
+      const i = order.indexOf(l.id);
+      return i === -1 ? Infinity : i;
+    };
+    this.languages.sort((a, b) => rank(a) - rank(b) || (b.priority || 0) - (a.priority || 0) || a.name.localeCompare(b.name));
+  }
+  moveLanguage(id, dir) {
+    const ids = this.languages.map((l) => l.id);
+    const i = ids.indexOf(id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= ids.length)
+      return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    this.settings.languageOrder = ids;
+    this.sortLanguages();
   }
   refreshActiveLanguages() {
     const enabled = new Set(this.settings.enabledLanguages || []);
     this.activeLanguages = this.languages.filter((l) => enabled.has(l.id));
+    this.keysCache = /* @__PURE__ */ new Map();
+  }
+  async updateStatusBar() {
+    const el = this.statusBarEl;
+    if (!el)
+      return;
+    const clear = () => {
+      el.setText("");
+      el.removeAttribute("aria-label");
+    };
+    if (!this.settings.statusBar)
+      return clear();
+    const file = this.app.workspace.getActiveFile();
+    if (!file || file.extension !== "md" || !this.inScope(file.path))
+      return clear();
+    try {
+      const text = await this.app.vault.cachedRead(file);
+      const canon = new Set(this.findMatches(text, this.canonicalForPath(file.path), { protect: true }).map((m) => m.canonical));
+      if (this.settings.statusBarIncludeLinks) {
+        const cache = this.app.metadataCache.getFileCache(file);
+        for (const link of cache && cache.links || []) {
+          const dest = this.app.metadataCache.getFirstLinkpathDest(link.link, file.path);
+          if (dest && this.isGlossaryFile(dest))
+            canon.add(dest.basename);
+        }
+      }
+      const n = canon.size;
+      el.setText(`${n} term${n === 1 ? "" : "s"}`);
+      el.setAttribute("aria-label", `${n} glossary term(s) on this page \u2014 click to turn into links`);
+    } catch (e) {
+      clear();
+    }
   }
   isGlossaryPath(path) {
     const p = this.settings.glossaryFolder.replace(/\/+$/, "");
@@ -1689,21 +2115,30 @@ var GlossaryLinkerPlugin = class extends Plugin {
     const f = this.app.workspace.getActiveFile();
     return f ? this.canonicalForPath(f.path) : null;
   }
-  wikiLink(canonical, display) {
-    return display === canonical ? `[[${canonical}]]` : `[[${canonical}|${display}]]`;
+  wikiLink(canonical, display, inTable) {
+    if (display === canonical)
+      return `[[${canonical}]]`;
+    return inTable ? `[[${canonical}\\|${display}]]` : `[[${canonical}|${display}]]`;
+  }
+  // A line counts as a table row if it contains a pipe.
+  inTableCell(text, pos) {
+    const ls = text.lastIndexOf("\n", pos - 1) + 1;
+    let le = text.indexOf("\n", pos);
+    if (le === -1)
+      le = text.length;
+    return text.slice(ls, le).includes("|");
   }
   // Replace each match (sorted, non-overlapping) with a wikilink, right to left.
   applyLinks(text, matches) {
     const sorted = matches.slice().sort((a, b) => a.start - b.start);
+    const links = sorted.map((m) => this.wikiLink(m.canonical, m.display, this.inTableCell(text, m.start)));
     let out = text;
     for (let j = sorted.length - 1; j >= 0; j--) {
-      const m = sorted[j];
-      out = out.slice(0, m.start) + this.wikiLink(m.canonical, m.display) + out.slice(m.end);
+      out = out.slice(0, sorted[j].start) + links[j] + out.slice(sorted[j].end);
     }
-    const changes = sorted.map((m) => ({ start: m.start, before: m.display, after: this.wikiLink(m.canonical, m.display) }));
+    const changes = sorted.map((m, j) => ({ start: m.start, before: m.display, after: links[j] }));
     return { newText: out, changes };
   }
-  // Navigation / preview shared by Reading view and the editor.
   openTerm(canonical, sourcePath, newTab) {
     this.app.workspace.openLinkText(canonical, sourcePath || "", newTab);
   }

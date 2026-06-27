@@ -84,15 +84,18 @@ function stemKeys(word) {
   return [es];
 }
 
+function softStemNoun(word) {
+  const w = word.toLowerCase().replace(/ё/g, 'е');
+  if (w.length > 3 && w.endsWith('ем')) {
+    const before = w[w.length - 3];
+    if (VOWELS.includes(before)) return w.slice(0, -2) + 'й';
+  }
+  return null;
+}
+
 // Base (dictionary) form for collected aliases.
 function lemma(word) {
-  word = word.toLowerCase().replace(/ё/g, 'е');
-  // Soft-stem nouns: рой → роем, бой → боем, герой → героем.
-  if (word.length > 3 && (word.endsWith('ем') || word.endsWith('ём'))) {
-    const before = word[word.length - 3];
-    if (VOWELS.includes(before)) return word.slice(0, -2) + 'й';
-  }
-  return strip(word);
+  return softStemNoun(word) || strip(word);
 }
 
 module.exports = {
@@ -103,8 +106,11 @@ module.exports = {
   keys(word, mode) {
     const w = word.toLowerCase();
     if (mode === 'exact') return [w];
-    if (mode === 'endingStrip') return [strip(w)];
-    return stemKeys(w);
+    const keyer = (x) => (mode === 'endingStrip' ? [strip(x)] : stemKeys(x));
+    const ks = keyer(w);
+    const soft = softStemNoun(w);
+    if (soft) for (const sk of keyer(soft)) if (!ks.includes(sk)) ks.push(sk);
+    return ks;
   },
   lemma,
 };

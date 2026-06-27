@@ -2,11 +2,12 @@
 
 const DEFAULT_SETTINGS = {
   glossaryFolder: 'glossary',
-  scopeMode: 'folders', // 'folders' | 'except' | 'vault'
-  scopeFolders: 'design\narchitecture\nfeatures\nguides\nvision',
-  excludeFolders: '_meta\n_attachments\n.obsidian',
+  scopeMode: 'vault', // 'folders' | 'except' | 'vault'
+  scopeFolders: '',
+  excludeFolders: '',
   matchMode: 'stemmer', // 'stemmer' | 'endingStrip' | 'exact'
-  enabledLanguages: null, // null = enable everything discovered on first run
+  enabledLanguages: null, // null until first-run defaults are picked
+  languageOrder: [], // ids in priority order (first = highest); overrides module defaults
   aliasHarvestMode: 'lemma', // 'lemma' | 'literal' | 'both'
   harvestOnSave: 'off', // 'off' | 'silent' | 'preview'
   harvestSingleWordOnly: true,
@@ -17,8 +18,22 @@ const DEFAULT_SETTINGS = {
   highlightInReading: true,
   editingHighlight: 'live', // 'off' | 'live' | 'onSave'
   skipHeadings: true,
+  statusBar: true,
+  statusBarIncludeLinks: true,
+  menuTurnInto: true,
+  menuCollect: true,
+  menuOpen: true,
+  menuCreateTerm: true,
+  menuExclude: true,
 };
 
 const splitLines = (s) => (s || '').split('\n').map((x) => x.trim()).filter(Boolean);
 
-module.exports = { DEFAULT_SETTINGS, splitLines };
+// Drop blank, "." and ".." segments so a stray "../" can't escape the vault.
+const sanitizeFolder = (s) => (s || '')
+  .split('/')
+  .map((x) => x.trim())
+  .filter((x) => x && x !== '.' && x !== '..')
+  .join('/');
+
+module.exports = { DEFAULT_SETTINGS, splitLines, sanitizeFolder };

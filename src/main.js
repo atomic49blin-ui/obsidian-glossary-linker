@@ -1,8 +1,9 @@
 'use strict';
 
 const { Plugin, Notice, debounce } = require('obsidian');
-const { DEFAULT_SETTINGS, splitLines } = require('./constants');
+const { DEFAULT_SETTINGS, splitLines, sanitizeFolder } = require('./constants');
 const BUILTIN_LANGUAGES = require('./builtin-languages');
+const { validateLanguage } = require('./language-api');
 const { GlossaryLinkerSettingTab } = require('./settings-tab');
 const matcher = require('./matcher');
 const highlight = require('./highlight');
@@ -17,18 +18,27 @@ class GlossaryLinkerPlugin extends Plugin {
       if (typeof loaded.harvestOnSave === 'boolean') this.settings.harvestOnSave = loaded.harvestOnSave ? 'silent' : 'off';
       if (typeof loaded.highlightInLivePreview === 'boolean' && loaded.editingHighlight === undefined) this.settings.editingHighlight = loaded.highlightInLivePreview ? 'live' : 'off';
     }
+    this.settings.glossaryFolder = sanitizeFolder(this.settings.glossaryFolder);
 
     this.languages = [];
     this.activeLanguages = [];
     this.languageErrors = [];
-    this.index = { byKey: new Map() };
+    this.index = { byKey: new Map(), termCount: 0 };
     this.excludeWordKeys = new Set();
+    this.keysCache = new Map();
 
     await this.loadLanguages();
     this.rebuildIndex();
-    this.scheduleRebuild = debounce(() => { this.rebuildIndex(); this.rerenderViews(); }, 600, true);
+    this.scheduleRebuild = debounce(() => { this.rebuildIndex(); this.rerenderViews(); this.updateStatusBar(); }, 600, true);
 
-    this.app.workspace.onLayoutReady(() => this.rebuildIndex());
+    this.statusBarEl = this.addStatusBarItem();
+    this.statusBarEl.addClass('mod-clickable');
+    this.statusBarEl.addEventListener('click', () => this.materializeCurrent());
+    this.updateStatusBarDebounced = debounce(() => this.updateStatusBar(), 400, true);
+    this.registerEvent(this.app.workspace.on('file-open', () => this.updateStatusBarDebounced()));
+    this.registerEvent(this.app.workspace.on('active-leaf-change', () => this.updateStatusBarDebounced()));
+
+    this.app.workspace.onLayoutReady(() => { this.rebuildIndex(); this.updateStatusBar(); });
 
     this.registerEvent(this.app.metadataCache.on('changed', (file) => {
       if (this.isGlossaryPath(file.path)) this.scheduleRebuild();
@@ -39,9 +49,33 @@ class GlossaryLinkerPlugin extends Plugin {
       if (file.extension !== 'md') return;
       if (this.settings.harvestOnSave !== 'off' && this.inScope(file.path)) this.harvestOnSaveDebounced(file);
       if (this.settings.editingHighlight === 'onSave') this.refreshEditors();
+      const active = this.app.workspace.getActiveFile();
+      if (active && active.path === file.path) this.updateStatusBarDebounced();
     }));
 
-    this.app.workspace.registerHoverLinkSource('glossary-linker', { display: 'Glossary Linker', defaultMod: false });
+    this.registerEvent(this.app.workspace.on('editor-menu', (menu, editor) => {
+      const sel = editor.getSelection().trim();
+      const hasSel = !!sel && !sel.includes('\n');
+
+      if (this.settings.menuCreateTerm && hasSel) {
+        menu.addItem((i) => i.setTitle('Glossary: create term & link').setIcon('plus-circle')
+          .onClick(() => this.createTermFromSelection(editor, true)));
+        menu.addItem((i) => i.setTitle('Glossary: create term').setIcon('file-plus')
+          .onClick(() => this.createTermFromSelection(editor, false)));
+      }
+      if (this.settings.menuExclude && hasSel) {
+        menu.addItem((i) => i.setTitle(`Glossary: add "${sel}" to excluded words`).setIcon('ban')
+          .onClick(() => this.addToExclusion('excludeWords', sel.toLowerCase())));
+      }
+      if (this.settings.menuCollect) {
+        const file = this.app.workspace.getActiveFile();
+        if (file) menu.addItem((i) => i.setTitle('Glossary: collect aliases from links (this note)').setIcon('download')
+          .onClick(() => this.harvestFiles([file], false)));
+      }
+    }));
+
+    // defaultMod: true → previews honour the Page Preview modifier setting, same as real links.
+    this.app.workspace.registerHoverLinkSource('glossary-linker', { display: 'Glossary Linker', defaultMod: true });
 
     this.registerMarkdownPostProcessor((el, ctx) => this.processReadingMode(el, ctx));
 
@@ -76,6 +110,11 @@ class GlossaryLinkerPlugin extends Plugin {
       callback: () => this.harvestFiles(this.getScopeFiles(), false),
     });
     this.addCommand({
+      id: 'create-term-from-selection',
+      name: 'Create glossary term from selection',
+      editorCallback: (editor) => this.createTermFromSelection(editor, true),
+    });
+    this.addCommand({
       id: 'rebuild-index',
       name: 'Rebuild glossary index',
       callback: () => { this.rebuildIndex(); new Notice('Glossary Linker: index rebuilt'); },
@@ -89,61 +128,80 @@ class GlossaryLinkerPlugin extends Plugin {
   }
 
   async loadLanguages() {
-    // Start from the bundled built-ins, then let runtime modules in the vault's
-    // <plugin>/languages/ folder add new languages or override a built-in by id.
-    this.languages = BUILTIN_LANGUAGES.slice();
+    // Validate the bundled modules; a malformed one is dropped and listed in
+    // settings rather than breaking the index. Nothing is loaded at runtime.
+    this.languages = [];
     this.languageErrors = [];
-    const dir = `${this.manifest.dir}/languages`;
-    const adapter = this.app.vault.adapter;
-    const runtimeIds = new Set();
-    try {
-      if (await adapter.exists(dir)) {
-        const listed = await adapter.list(dir);
-        for (const path of listed.files) {
-          if (!path.toLowerCase().endsWith('.js')) continue;
-          const file = path.split('/').pop();
-          try {
-            const code = await adapter.read(path);
-            const mod = { exports: {} };
-            const safeRequire = (typeof require !== 'undefined') ? require : () => ({});
-            new Function('module', 'exports', 'require', code)(mod, mod.exports, safeRequire);
-            const lang = mod.exports;
-            const problem = this.validateLanguage(lang);
-            if (problem) { this.languageErrors.push({ file, error: problem }); continue; }
-            if (runtimeIds.has(lang.id)) { this.languageErrors.push({ file, error: `duplicate id "${lang.id}"` }); continue; }
-            runtimeIds.add(lang.id);
-            const idx = this.languages.findIndex((l) => l.id === lang.id);
-            if (idx >= 0) this.languages[idx] = lang; else this.languages.push(lang);
-          } catch (e) {
-            this.languageErrors.push({ file, error: String(e && e.message || e) });
-          }
-        }
-      }
-    } catch (e) {
-      console.error('Glossary Linker: cannot list languages folder', e);
+    const seen = new Set();
+    for (const lang of BUILTIN_LANGUAGES) {
+      const id = lang && lang.id;
+      const error = validateLanguage(lang);
+      if (error) { this.languageErrors.push({ id: id || '?', error }); continue; }
+      if (seen.has(id)) { this.languageErrors.push({ id, error: `duplicate id "${id}"` }); continue; }
+      seen.add(id);
+      this.languages.push(lang);
     }
-    this.languages.sort((a, b) => (b.priority || 0) - (a.priority || 0) || a.name.localeCompare(b.name));
-    this.languageErrors.sort((a, b) => a.file.localeCompare(b.file));
+    this.sortLanguages();
+    this.languageErrors.sort((a, b) => a.id.localeCompare(b.id));
 
     if (!Array.isArray(this.settings.enabledLanguages)) {
-      this.settings.enabledLanguages = this.languages.map((l) => l.id);
+      // First run: enable English plus the Obsidian interface language, if present.
+      const sys = (window.localStorage.getItem('language') || '').split('-')[0].toLowerCase();
+      const wanted = new Set(['en']);
+      if (sys && this.languages.some((l) => l.id === sys)) wanted.add(sys);
+      this.settings.enabledLanguages = this.languages.filter((l) => wanted.has(l.id)).map((l) => l.id);
       await this.saveSettings();
     }
     this.refreshActiveLanguages();
   }
 
-  validateLanguage(lang) {
-    if (!lang || typeof lang !== 'object') return 'module does not export an object';
-    if (!lang.id) return 'missing "id"';
-    if (!lang.name) return 'missing "name"';
-    if (typeof lang.match !== 'function') return 'missing match() function';
-    if (typeof lang.keys !== 'function') return 'missing keys() function';
-    return null;
+  sortLanguages() {
+    const order = this.settings.languageOrder || [];
+    const rank = (l) => { const i = order.indexOf(l.id); return i === -1 ? Infinity : i; };
+    this.languages.sort((a, b) =>
+      rank(a) - rank(b) || (b.priority || 0) - (a.priority || 0) || a.name.localeCompare(b.name));
+  }
+
+  moveLanguage(id, dir) {
+    const ids = this.languages.map((l) => l.id);
+    const i = ids.indexOf(id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    this.settings.languageOrder = ids;
+    this.sortLanguages();
   }
 
   refreshActiveLanguages() {
     const enabled = new Set(this.settings.enabledLanguages || []);
     this.activeLanguages = this.languages.filter((l) => enabled.has(l.id));
+    this.keysCache = new Map();
+  }
+
+  async updateStatusBar() {
+    const el = this.statusBarEl;
+    if (!el) return;
+    const clear = () => { el.setText(''); el.removeAttribute('aria-label'); };
+    if (!this.settings.statusBar) return clear();
+    const file = this.app.workspace.getActiveFile();
+    if (!file || file.extension !== 'md' || !this.inScope(file.path)) return clear();
+    try {
+      const text = await this.app.vault.cachedRead(file);
+      // protect:true counts only plain-text mentions; linked terms are added below.
+      const canon = new Set(this.findMatches(text, this.canonicalForPath(file.path), { protect: true }).map((m) => m.canonical));
+      if (this.settings.statusBarIncludeLinks) {
+        const cache = this.app.metadataCache.getFileCache(file);
+        for (const link of (cache && cache.links) || []) {
+          const dest = this.app.metadataCache.getFirstLinkpathDest(link.link, file.path);
+          if (dest && this.isGlossaryFile(dest)) canon.add(dest.basename);
+        }
+      }
+      const n = canon.size;
+      el.setText(`${n} term${n === 1 ? '' : 's'}`);
+      el.setAttribute('aria-label', `${n} glossary term(s) on this page — click to turn into links`);
+    } catch (e) {
+      clear();
+    }
   }
 
   isGlossaryPath(path) {
@@ -180,23 +238,32 @@ class GlossaryLinkerPlugin extends Plugin {
     return f ? this.canonicalForPath(f.path) : null;
   }
 
-  wikiLink(canonical, display) {
-    return display === canonical ? `[[${canonical}]]` : `[[${canonical}|${display}]]`;
+  wikiLink(canonical, display, inTable) {
+    if (display === canonical) return `[[${canonical}]]`;
+    // Inside a Markdown table cell the alias pipe must be escaped or it splits the row.
+    return inTable ? `[[${canonical}\\|${display}]]` : `[[${canonical}|${display}]]`;
+  }
+
+  // A line counts as a table row if it contains a pipe.
+  inTableCell(text, pos) {
+    const ls = text.lastIndexOf('\n', pos - 1) + 1;
+    let le = text.indexOf('\n', pos);
+    if (le === -1) le = text.length;
+    return text.slice(ls, le).includes('|');
   }
 
   // Replace each match (sorted, non-overlapping) with a wikilink, right to left.
   applyLinks(text, matches) {
     const sorted = matches.slice().sort((a, b) => a.start - b.start);
+    const links = sorted.map((m) => this.wikiLink(m.canonical, m.display, this.inTableCell(text, m.start)));
     let out = text;
     for (let j = sorted.length - 1; j >= 0; j--) {
-      const m = sorted[j];
-      out = out.slice(0, m.start) + this.wikiLink(m.canonical, m.display) + out.slice(m.end);
+      out = out.slice(0, sorted[j].start) + links[j] + out.slice(sorted[j].end);
     }
-    const changes = sorted.map((m) => ({ start: m.start, before: m.display, after: this.wikiLink(m.canonical, m.display) }));
+    const changes = sorted.map((m, j) => ({ start: m.start, before: m.display, after: links[j] }));
     return { newText: out, changes };
   }
 
-  // Navigation / preview shared by Reading view and the editor.
   openTerm(canonical, sourcePath, newTab) {
     this.app.workspace.openLinkText(canonical, sourcePath || '', newTab);
   }
