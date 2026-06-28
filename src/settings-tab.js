@@ -17,7 +17,7 @@ class GlossaryLinkerSettingTab extends PluginSettingTab {
       if (rebuild) { this.plugin.rebuildIndex(); this.plugin.rerenderViews(); this.plugin.updateStatusBar(); }
     };
     // Scope changes don't touch the term index, so refresh views without a rebuild.
-    const saveScope = async () => { await this.plugin.saveSettings(); this.plugin.rerenderViews(); this.plugin.updateStatusBar(); };
+    const saveScope = async () => { await this.plugin.saveSettings(); this.plugin.rerenderViews(); this.plugin.updateStatusBar(); this.plugin.refreshOverviewDebounced(); };
 
     containerEl.createEl('h3', { text: 'Scope' });
 
@@ -25,7 +25,7 @@ class GlossaryLinkerSettingTab extends PluginSettingTab {
       .setName('Glossary folder')
       .setDesc('Folder with one note per term (file name = the term title).')
       .addText((t) => {
-        t.setValue(s.glossaryFolder).onChange(async (v) => { s.glossaryFolder = sanitizeFolder(v); await save(true); this.renderFolderStatus(); });
+        t.setValue(s.glossaryFolder).onChange(async (v) => { s.glossaryFolder = sanitizeFolder(v); await save(true); this.renderFolderStatus(); this.plugin.refreshOverviewDebounced(); });
         if (folderSuggestAvailable()) new FolderSuggest(this.app, t.inputEl);
       });
 
@@ -249,6 +249,13 @@ class GlossaryLinkerSettingTab extends PluginSettingTab {
       .setName('"Unlink term" item')
       .setDesc('Show "Glossary: unlink this term" when right-clicking an existing glossary link.')
       .addToggle((t) => t.setValue(s.menuUnlink).onChange(async (v) => { s.menuUnlink = v; await save(false); }));
+
+    containerEl.createEl('h3', { text: 'Overview' });
+
+    new Setting(containerEl)
+      .setName('Ribbon icon')
+      .setDesc('Show a ribbon button that opens the glossary overview panel. The "Open glossary overview" command works either way.')
+      .addToggle((t) => t.setValue(s.showRibbonIcon).onChange(async (v) => { s.showRibbonIcon = v; await save(false); this.plugin.applyRibbonIcon(); }));
 
     containerEl.createEl('h3', { text: 'Maintenance' });
 

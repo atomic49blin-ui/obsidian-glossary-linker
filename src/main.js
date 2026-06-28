@@ -10,6 +10,7 @@ const highlight = require('./highlight');
 const actions = require('./actions');
 const api = require('./api');
 const { GlossaryTermSuggest, suggestAvailable } = require('./term-suggest');
+const { GlossaryOverviewView, OVERVIEW_VIEW_TYPE } = require('./overview-view');
 
 class GlossaryLinkerPlugin extends Plugin {
   async onload() {
@@ -35,6 +36,7 @@ class GlossaryLinkerPlugin extends Plugin {
     this.rebuildIndex();
     this.api = this.buildApi(); // app.plugins.plugins['glossary-linker'].api
     this.scheduleRebuild = debounce(() => { this.rebuildIndex(); this.rerenderViews(); this.updateStatusBar(); }, 600, true);
+    this.refreshOverviewDebounced = debounce(() => this.refreshOverview(), 800, true);
 
     this.statusBarEl = this.addStatusBarItem();
     this.statusBarEl.addClass('mod-clickable');
@@ -138,6 +140,14 @@ class GlossaryLinkerPlugin extends Plugin {
 
     if (suggestAvailable()) this.registerEditorSuggest(new GlossaryTermSuggest(this.app, this));
 
+    this.registerView(OVERVIEW_VIEW_TYPE, (leaf) => new GlossaryOverviewView(leaf, this));
+    this.applyRibbonIcon();
+
+    this.addCommand({
+      id: 'open-overview',
+      name: 'Open glossary overview',
+      callback: () => this.activateOverview(),
+    });
     this.addCommand({
       id: 'materialize-current',
       name: 'Link glossary terms: this note',
@@ -407,7 +417,8 @@ class GlossaryLinkerPlugin extends Plugin {
   }
 
   inScope(path) {
-    const covers = (entry) => path === entry || path.startsWith(entry + '/');
+    // sanitizeFolder so a stray trailing "/" or "./" still matches.
+    const covers = (entry) => { const e = sanitizeFolder(entry); return !!e && (path === e || path.startsWith(e + '/')); };
     if (splitLines(this.settings.excludeFolders).some(covers)) return false;
     if (this.settings.scopeMode === 'folders') return splitLines(this.settings.scopeFolders).some(covers);
     return true;
@@ -431,6 +442,7 @@ class GlossaryLinkerPlugin extends Plugin {
     await this.saveSettings();
     this.rerenderViews();
     this.updateStatusBar();
+    this.refreshOverviewDebounced();
     const where = listKey === 'excludeFolders' ? 'always-excluded paths' : 'paths in scope';
     new Notice(`Glossary Linker: ${add ? 'added' : 'removed'} "${entry}" ${add ? 'to' : 'from'} ${where}`);
   }
@@ -449,6 +461,32 @@ class GlossaryLinkerPlugin extends Plugin {
       const cm = leaf.view && leaf.view.editor && leaf.view.editor.cm;
       if (cm) cm.dispatch({ effects: this.cmRefreshEffect.of(null) });
     });
+  }
+
+  async activateOverview() {
+    const { workspace } = this.app;
+    let leaf = workspace.getLeavesOfType(OVERVIEW_VIEW_TYPE)[0];
+    if (!leaf) {
+      leaf = workspace.getRightLeaf(false);
+      await leaf.setViewState({ type: OVERVIEW_VIEW_TYPE, active: true });
+    }
+    workspace.revealLeaf(leaf);
+  }
+
+  refreshOverview() {
+    this.app.workspace.getLeavesOfType(OVERVIEW_VIEW_TYPE).forEach((leaf) => {
+      if (leaf.view && typeof leaf.view.refresh === 'function') leaf.view.refresh();
+    });
+  }
+
+  applyRibbonIcon() {
+    const want = this.settings.showRibbonIcon;
+    if (want && !this.ribbonEl) {
+      this.ribbonEl = this.addRibbonIcon('book-a', 'Glossary overview', () => this.activateOverview());
+    } else if (!want && this.ribbonEl) {
+      this.ribbonEl.remove();
+      this.ribbonEl = null;
+    }
   }
 }
 

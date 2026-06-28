@@ -40,6 +40,19 @@ var require_constants = __commonJS({
       // min typed length before autocomplete triggers
       aliasCollisionWarnings: true,
       // warn when a collected/created alias collides with another term
+      candidateMinNotes: 3,
+      // overview: a candidate must appear in at least this many notes
+      overviewSort: "usage",
+      // overview terms order: 'usage' | 'name'
+      overviewCandidateSort: "notes",
+      // overview candidates order: 'notes' | 'count'
+      overviewCountLinks: true,
+      // overview usage count also counts direct [[Term]] links
+      overviewWholeVault: false,
+      // overview scans every note instead of the linker scope
+      overviewTermsCollapsed: false,
+      overviewCandidatesCollapsed: false,
+      showRibbonIcon: true,
       highlightInReading: true,
       editingHighlight: "live",
       // 'off' | 'live' | 'onSave'
@@ -905,6 +918,7 @@ var require_settings_tab = __commonJS({
           await this.plugin.saveSettings();
           this.plugin.rerenderViews();
           this.plugin.updateStatusBar();
+          this.plugin.refreshOverviewDebounced();
         };
         containerEl.createEl("h3", { text: "Scope" });
         new Setting(containerEl).setName("Glossary folder").setDesc("Folder with one note per term (file name = the term title).").addText((t) => {
@@ -912,6 +926,7 @@ var require_settings_tab = __commonJS({
             s.glossaryFolder = sanitizeFolder2(v);
             await save(true);
             this.renderFolderStatus();
+            this.plugin.refreshOverviewDebounced();
           });
           if (folderSuggestAvailable())
             new FolderSuggest(this.app, t.inputEl);
@@ -1106,6 +1121,12 @@ var require_settings_tab = __commonJS({
         new Setting(containerEl).setName('"Unlink term" item').setDesc('Show "Glossary: unlink this term" when right-clicking an existing glossary link.').addToggle((t) => t.setValue(s.menuUnlink).onChange(async (v) => {
           s.menuUnlink = v;
           await save(false);
+        }));
+        containerEl.createEl("h3", { text: "Overview" });
+        new Setting(containerEl).setName("Ribbon icon").setDesc('Show a ribbon button that opens the glossary overview panel. The "Open glossary overview" command works either way.').addToggle((t) => t.setValue(s.showRibbonIcon).onChange(async (v) => {
+          s.showRibbonIcon = v;
+          await save(false);
+          this.plugin.applyRibbonIcon();
         }));
         containerEl.createEl("h3", { text: "Maintenance" });
         new Setting(containerEl).setName("Rebuild glossary index").setDesc("Re-scan the glossary folder now.").addButton((b) => b.setButtonText("Rebuild").onClick(() => {
@@ -1392,6 +1413,34 @@ var require_matcher = __commonJS({
 var require_highlight = __commonJS({
   "src/highlight.js"(exports2, module2) {
     "use strict";
+    var { Platform } = require("obsidian");
+    var LONG_PRESS_MS = 500;
+    var fireContextMenu = (el, x, y) => el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: x, clientY: y }));
+    function longPressTracker(fire) {
+      let timer = null, x = 0, y = 0, target = null;
+      const cancel = () => {
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+      };
+      return {
+        start(t, el) {
+          target = el;
+          x = t.clientX;
+          y = t.clientY;
+          timer = setTimeout(() => {
+            timer = null;
+            fire(target, x, y);
+          }, LONG_PRESS_MS);
+        },
+        move(t) {
+          if (timer && (Math.abs(t.clientX - x) > 10 || Math.abs(t.clientY - y) > 10))
+            cancel();
+        },
+        cancel
+      };
+    }
     module2.exports = {
       processReadingMode(el, ctx) {
         if (!this.settings.highlightInReading)
@@ -1479,6 +1528,13 @@ var require_highlight = __commonJS({
             if (this.showLinkMenu(e, canonical, display, file, null, occurrence, m.alts))
               e.stopPropagation();
           });
+          if (Platform.isMobile) {
+            const lp = longPressTracker(fireContextMenu);
+            a.addEventListener("touchstart", (e) => lp.start(e.touches[0], a), { passive: true });
+            a.addEventListener("touchmove", (e) => lp.move(e.touches[0]), { passive: true });
+            a.addEventListener("touchend", lp.cancel);
+            a.addEventListener("touchcancel", lp.cancel);
+          }
           frag.appendChild(a);
           cursor = m.end;
         }
@@ -1547,6 +1603,7 @@ var require_highlight = __commonJS({
           const v = el.getAttribute("data-glossary-alts");
           return v ? v.split("\n") : null;
         };
+        const editorLp = longPressTracker(fireContextMenu);
         const vp = ViewPlugin.fromClass(
           class {
             constructor(v) {
@@ -1603,7 +1660,19 @@ var require_highlight = __commonJS({
                   return;
                 const file = plugin.app.workspace.getActiveFile();
                 plugin.showLinkMenu(e, canonicalOf(el), el.textContent, file, view2.posAtDOM(el), void 0, altsOf(el));
-              }
+              },
+              touchstart(e) {
+                if (!Platform.isMobile)
+                  return;
+                const el = targetEl(e);
+                if (el)
+                  editorLp.start(e.touches[0], el);
+              },
+              touchmove(e) {
+                editorLp.move(e.touches[0]);
+              },
+              touchend: editorLp.cancel,
+              touchcancel: editorLp.cancel
             }
           }
         );
@@ -2379,6 +2448,7 @@ var require_actions = __commonJS({
 var require_api = __commonJS({
   "src/api.js"(exports2, module2) {
     "use strict";
+    var { Notice: Notice2 } = require("obsidian");
     module2.exports = {
       buildApi() {
         return {
@@ -2394,6 +2464,8 @@ var require_api = __commonJS({
           findMatches: (text) => this.findMatches(String(text || ""), null, { protect: true }),
           // Heavy: scans in-scope notes and counts occurrences per term. Call explicitly.
           getUsageReport: (opts) => this.getUsageReport(opts),
+          // Heavy: frequent in-scope words that are not yet terms. Call explicitly.
+          collectCandidates: (opts) => this.collectCandidates(opts),
           // Subscribe to index rebuilds; returns an unsubscribe function.
           onChange: (cb) => this.onIndexChange(cb)
         };
@@ -2413,23 +2485,30 @@ var require_api = __commonJS({
         }
         return null;
       },
-      // For every term, the number of plain-text occurrences across in-scope notes
-      // and which files they appear in. Terms with count 0 are orphans.
-      async getUsageReport() {
+      // For every term, how many times it is used across in-scope notes and in which
+      // files. Counts plain-text mentions; with opts.includeLinks, also direct
+      // [[Term]] / [[Term|alias]] links. Terms with count 0 are orphans.
+      async getUsageReport(opts = {}) {
         const counts = /* @__PURE__ */ new Map();
         for (const t of this.terms || [])
           counts.set(t.canonical, { canonical: t.canonical, path: t.path, count: 0, files: [] });
-        const files = this.getScopeFiles();
+        const files = opts.wholeVault ? this.app.vault.getMarkdownFiles() : this.getScopeFiles();
         for (const file of files) {
-          let text;
-          try {
-            text = await this.app.vault.cachedRead(file);
-          } catch (e) {
-            continue;
-          }
           const here = /* @__PURE__ */ new Map();
-          for (const m of this.findMatches(text, this.canonicalForPath(file.path), { protect: true })) {
-            here.set(m.canonical, (here.get(m.canonical) || 0) + 1);
+          try {
+            const text = await this.app.vault.cachedRead(file);
+            for (const m of this.findMatches(text, this.canonicalForPath(file.path), { protect: true })) {
+              here.set(m.canonical, (here.get(m.canonical) || 0) + 1);
+            }
+          } catch (e) {
+          }
+          if (opts.includeLinks) {
+            const cache = this.app.metadataCache.getFileCache(file);
+            for (const link of cache && cache.links || []) {
+              const dest = this.app.metadataCache.getFirstLinkpathDest(link.link, file.path);
+              if (dest && this.isGlossaryFile(dest))
+                here.set(dest.basename, (here.get(dest.basename) || 0) + 1);
+            }
           }
           for (const [canonical, n] of here) {
             const entry = counts.get(canonical);
@@ -2440,6 +2519,65 @@ var require_api = __commonJS({
           }
         }
         return [...counts.values()];
+      },
+      // Frequent in-scope words that are not yet terms — candidates worth defining.
+      // Pure frequency: a word is kept when its lemma appears in at least
+      // candidateMinNotes notes. Inflected forms collapse onto one lemma.
+      async collectCandidates(opts = {}) {
+        const minLen = Math.max(1, this.settings.minTermLength || 1);
+        const minNotes = Math.max(1, this.settings.candidateMinNotes || 1);
+        const groups = /* @__PURE__ */ new Map();
+        const files = opts.wholeVault ? this.app.vault.getMarkdownFiles() : this.getScopeFiles();
+        const notice = new Notice2("Glossary Linker: scanning\u2026", 0);
+        try {
+          for (let i = 0; i < files.length; i++) {
+            if (i % 25 === 0)
+              notice.setMessage(`Glossary Linker: scanning ${i + 1}/${files.length}\u2026`);
+            let text;
+            try {
+              text = await this.app.vault.cachedRead(files[i]);
+            } catch (e) {
+              continue;
+            }
+            const protect = this.computeProtected(text);
+            for (const m of text.matchAll(/[\p{L}\p{Nd}]+/gu)) {
+              const raw = m[0];
+              if (/^\p{Nd}+$/u.test(raw))
+                continue;
+              if (this.overlapsProtected(protect, m.index, m.index + raw.length))
+                continue;
+              if (this.keysFor(raw).some((k) => this.index.byKey.has(k) || this.excludeWordKeys.has(k)))
+                continue;
+              const lemma = this.lemmaFor(raw);
+              if (lemma.length < minLen)
+                continue;
+              let g = groups.get(lemma);
+              if (!g) {
+                g = { forms: /* @__PURE__ */ new Map(), total: 0, files: /* @__PURE__ */ new Set() };
+                groups.set(lemma, g);
+              }
+              g.forms.set(raw, (g.forms.get(raw) || 0) + 1);
+              g.total++;
+              g.files.add(files[i].path);
+            }
+          }
+        } finally {
+          notice.hide();
+        }
+        const out = [];
+        for (const [lemma, g] of groups) {
+          if (g.files.size < minNotes)
+            continue;
+          let display = lemma, best = -1;
+          for (const [form, n] of g.forms)
+            if (n > best) {
+              best = n;
+              display = form;
+            }
+          out.push({ lemma, display, count: g.total, docFreq: g.files.size });
+        }
+        out.sort((a, b) => b.docFreq - a.docFreq || b.count - a.count);
+        return out.slice(0, 100);
       },
       onIndexChange(cb) {
         if (typeof cb !== "function")
@@ -2550,6 +2688,220 @@ var require_term_suggest = __commonJS({
   }
 });
 
+// src/overview-view.js
+var require_overview_view = __commonJS({
+  "src/overview-view.js"(exports2, module2) {
+    "use strict";
+    var { ItemView } = require("obsidian");
+    var OVERVIEW_VIEW_TYPE2 = "glossary-overview";
+    var plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+    var GlossaryOverviewView2 = class extends ItemView {
+      constructor(leaf, plugin) {
+        super(leaf);
+        this.plugin = plugin;
+        this.terms = [];
+        this.candidates = [];
+      }
+      getViewType() {
+        return OVERVIEW_VIEW_TYPE2;
+      }
+      getDisplayText() {
+        return "Glossary";
+      }
+      getIcon() {
+        return "book-a";
+      }
+      async onOpen() {
+        this.contentEl.addClass("glossary-overview");
+        this.renderShell();
+        this.unsubscribe = this.plugin.onIndexChange(() => this.refreshTerms());
+        await this.refresh();
+      }
+      async onClose() {
+        if (this.unsubscribe)
+          this.unsubscribe();
+      }
+      renderShell() {
+        const root = this.contentEl;
+        root.empty();
+        const bar = root.createDiv({ cls: "glossary-overview-bar" });
+        bar.createEl("button", { text: "Rescan", cls: "mod-cta" }).onclick = () => this.refresh();
+        const scope = bar.createEl("label", { cls: "glossary-overview-check" });
+        const sc = scope.createEl("input", { type: "checkbox" });
+        sc.checked = this.plugin.settings.overviewWholeVault;
+        scope.createSpan({ text: "whole vault" });
+        scope.setAttribute("aria-label", "Scan every note instead of only the linker scope");
+        sc.onchange = async () => {
+          this.plugin.settings.overviewWholeVault = sc.checked;
+          await this.plugin.saveSettings();
+          await this.refresh();
+        };
+        this.termsSection = root.createDiv();
+        this.candidatesSection = root.createDiv();
+      }
+      foldHeader(el, label, count, collapsed, onToggle) {
+        const head = el.createDiv({ cls: "glossary-overview-head is-toggle" });
+        head.createSpan({ cls: "glossary-overview-caret", text: collapsed ? "\u25B8" : "\u25BE" });
+        head.createSpan({ text: collapsed ? label : `${label} (${count})` });
+        head.onclick = onToggle;
+      }
+      sortControl(controls, options, value, onChange) {
+        controls.createSpan({ text: "Sort" });
+        const sel = controls.createEl("select");
+        for (const [text, val] of options)
+          sel.createEl("option", { text, value: val });
+        sel.value = value;
+        sel.onchange = () => onChange(sel.value);
+      }
+      async refresh() {
+        await this.loadUsage();
+        this.renderTerms();
+        await this.refreshCandidates();
+      }
+      async loadUsage() {
+        this.terms = await this.plugin.getUsageReport({
+          includeLinks: this.plugin.settings.overviewCountLinks,
+          wholeVault: this.plugin.settings.overviewWholeVault
+        });
+      }
+      // Index changes (new/renamed/excluded terms) only change membership, not counts —
+      // carry counts over and let an explicit Rescan recompute them.
+      refreshTerms() {
+        const prev = new Map(this.terms.map((t) => [t.canonical, t.count]));
+        this.terms = this.plugin.getTerms().map((t) => ({ canonical: t.canonical, path: t.path, count: prev.get(t.canonical) || 0 }));
+        this.renderTerms();
+      }
+      async refreshCandidates() {
+        if (!this.plugin.settings.overviewCandidatesCollapsed) {
+          this.candidates = await this.plugin.collectCandidates({ wholeVault: this.plugin.settings.overviewWholeVault });
+        }
+        this.renderCandidates();
+      }
+      renderTerms() {
+        const el = this.termsSection;
+        el.empty();
+        const collapsed = this.plugin.settings.overviewTermsCollapsed;
+        this.foldHeader(el, "Terms", this.terms.length, collapsed, () => this.toggleTerms());
+        if (collapsed)
+          return;
+        const controls = el.createDiv({ cls: "glossary-overview-controls" });
+        this.sortControl(controls, [["Most used", "usage"], ["Name", "name"]], this.plugin.settings.overviewSort, async (v) => {
+          this.plugin.settings.overviewSort = v;
+          await this.plugin.saveSettings();
+          this.renderTerms();
+        });
+        const check = controls.createEl("label", { cls: "glossary-overview-check" });
+        const cb = check.createEl("input", { type: "checkbox" });
+        cb.checked = this.plugin.settings.overviewCountLinks;
+        check.createSpan({ text: "count links" });
+        check.setAttribute("aria-label", "Also count existing [[Term]] links, not just plain-text mentions");
+        cb.onchange = async () => {
+          this.plugin.settings.overviewCountLinks = cb.checked;
+          await this.plugin.saveSettings();
+          await this.loadUsage();
+          this.renderTerms();
+        };
+        const list = el.createDiv({ cls: "glossary-overview-list" });
+        if (!this.terms.length) {
+          list.createDiv({ cls: "glossary-overview-empty", text: "No terms indexed." });
+          return;
+        }
+        const byName = this.plugin.settings.overviewSort === "name";
+        const sorted = this.terms.slice().sort((a, b) => byName ? a.canonical.localeCompare(b.canonical) : b.count - a.count || a.canonical.localeCompare(b.canonical));
+        for (const t of sorted) {
+          const row = list.createDiv({ cls: "glossary-overview-row" });
+          if (t.count === 0)
+            row.addClass("is-orphan");
+          const name = row.createSpan({ cls: "glossary-overview-name is-link", text: t.canonical });
+          name.setAttribute("aria-label", "Open \u2014 middle-click for a new tab");
+          name.addEventListener("click", () => this.plugin.openTerm(t.canonical, "", false));
+          name.addEventListener("mousedown", (e) => {
+            if (e.button === 1)
+              e.preventDefault();
+          });
+          name.addEventListener("auxclick", (e) => {
+            if (e.button === 1) {
+              e.preventDefault();
+              this.plugin.openTerm(t.canonical, "", true);
+            }
+          });
+          row.createSpan({ cls: "glossary-overview-count", text: t.count === 0 ? "unused \u26A0" : plural(t.count, "use") });
+          const actions2 = row.createSpan({ cls: "glossary-overview-actions" });
+          const link = actions2.createEl("a", { cls: "glossary-overview-act", text: "link all" });
+          link.onclick = () => this.plugin.materializeTermScope(t.canonical);
+        }
+      }
+      renderCandidates() {
+        const el = this.candidatesSection;
+        el.empty();
+        const collapsed = this.plugin.settings.overviewCandidatesCollapsed;
+        this.foldHeader(el, "Candidates", this.candidates.length, collapsed, () => this.toggleCandidates());
+        if (collapsed)
+          return;
+        const controls = el.createDiv({ cls: "glossary-overview-controls" });
+        this.sortControl(controls, [["Notes", "notes"], ["Mentions", "count"]], this.plugin.settings.overviewCandidateSort, async (v) => {
+          this.plugin.settings.overviewCandidateSort = v;
+          await this.plugin.saveSettings();
+          this.renderCandidates();
+        });
+        controls.createSpan({ text: "Min notes" });
+        const input = controls.createEl("input", { type: "number" });
+        input.min = "1";
+        input.value = String(this.plugin.settings.candidateMinNotes);
+        input.onchange = async () => {
+          const n = Math.max(1, parseInt(input.value, 10) || 1);
+          input.value = String(n);
+          this.plugin.settings.candidateMinNotes = n;
+          await this.plugin.saveSettings();
+          await this.refreshCandidates();
+        };
+        const list = el.createDiv({ cls: "glossary-overview-list" });
+        if (!this.candidates.length) {
+          list.createDiv({ cls: "glossary-overview-empty", text: "No candidates." });
+          return;
+        }
+        const byCount = this.plugin.settings.overviewCandidateSort === "count";
+        const sorted = this.candidates.slice().sort((a, b) => byCount ? b.count - a.count || b.docFreq - a.docFreq : b.docFreq - a.docFreq || b.count - a.count);
+        for (const c of sorted) {
+          const row = list.createDiv({ cls: "glossary-overview-row" });
+          row.createSpan({ cls: "glossary-overview-name", text: c.display });
+          row.createSpan({ cls: "glossary-overview-count", text: `${plural(c.docFreq, "note")} \xB7 ${plural(c.count, "use")}` });
+          const actions2 = row.createSpan({ cls: "glossary-overview-actions" });
+          const add = actions2.createEl("a", { cls: "glossary-overview-act", text: "+ term" });
+          add.onclick = async () => {
+            await this.plugin.createTermNote(null, c.display, false);
+            this.drop(c);
+          };
+          const dismiss = actions2.createEl("a", { cls: "glossary-overview-act", text: "\u2715" });
+          dismiss.onclick = async () => {
+            await this.plugin.addToExclusion("excludeWords", c.display.toLowerCase());
+            this.drop(c);
+          };
+        }
+      }
+      drop(candidate) {
+        this.candidates = this.candidates.filter((x) => x !== candidate);
+        this.renderCandidates();
+      }
+      toggleTerms() {
+        this.plugin.settings.overviewTermsCollapsed = !this.plugin.settings.overviewTermsCollapsed;
+        this.plugin.saveSettings();
+        this.renderTerms();
+      }
+      toggleCandidates() {
+        const collapsed = !this.plugin.settings.overviewCandidatesCollapsed;
+        this.plugin.settings.overviewCandidatesCollapsed = collapsed;
+        this.plugin.saveSettings();
+        if (collapsed)
+          this.renderCandidates();
+        else
+          this.refreshCandidates();
+      }
+    };
+    module2.exports = { GlossaryOverviewView: GlossaryOverviewView2, OVERVIEW_VIEW_TYPE: OVERVIEW_VIEW_TYPE2 };
+  }
+});
+
 // src/main.js
 var { Plugin, Notice, TFile, TFolder, debounce } = require("obsidian");
 var { DEFAULT_SETTINGS, splitLines, sanitizeFolder } = require_constants();
@@ -2561,6 +2913,7 @@ var highlight = require_highlight();
 var actions = require_actions();
 var api = require_api();
 var { GlossaryTermSuggest, suggestAvailable } = require_term_suggest();
+var { GlossaryOverviewView, OVERVIEW_VIEW_TYPE } = require_overview_view();
 var GlossaryLinkerPlugin = class extends Plugin {
   async onload() {
     const loaded = await this.loadData();
@@ -2590,6 +2943,7 @@ var GlossaryLinkerPlugin = class extends Plugin {
       this.rerenderViews();
       this.updateStatusBar();
     }, 600, true);
+    this.refreshOverviewDebounced = debounce(() => this.refreshOverview(), 800, true);
     this.statusBarEl = this.addStatusBarItem();
     this.statusBarEl.addClass("mod-clickable");
     this.statusBarEl.addEventListener("click", () => this.materializeCurrent());
@@ -2682,6 +3036,13 @@ var GlossaryLinkerPlugin = class extends Plugin {
     this.registerEditingHighlight();
     if (suggestAvailable())
       this.registerEditorSuggest(new GlossaryTermSuggest(this.app, this));
+    this.registerView(OVERVIEW_VIEW_TYPE, (leaf) => new GlossaryOverviewView(leaf, this));
+    this.applyRibbonIcon();
+    this.addCommand({
+      id: "open-overview",
+      name: "Open glossary overview",
+      callback: () => this.activateOverview()
+    });
     this.addCommand({
       id: "materialize-current",
       name: "Link glossary terms: this note",
@@ -2963,7 +3324,10 @@ var GlossaryLinkerPlugin = class extends Plugin {
     });
   }
   inScope(path) {
-    const covers = (entry) => path === entry || path.startsWith(entry + "/");
+    const covers = (entry) => {
+      const e = sanitizeFolder(entry);
+      return !!e && (path === e || path.startsWith(e + "/"));
+    };
     if (splitLines(this.settings.excludeFolders).some(covers))
       return false;
     if (this.settings.scopeMode === "folders")
@@ -2987,6 +3351,7 @@ var GlossaryLinkerPlugin = class extends Plugin {
     await this.saveSettings();
     this.rerenderViews();
     this.updateStatusBar();
+    this.refreshOverviewDebounced();
     const where = listKey === "excludeFolders" ? "always-excluded paths" : "paths in scope";
     new Notice(`Glossary Linker: ${add ? "added" : "removed"} "${entry}" ${add ? "to" : "from"} ${where}`);
   }
@@ -3006,6 +3371,30 @@ var GlossaryLinkerPlugin = class extends Plugin {
       if (cm)
         cm.dispatch({ effects: this.cmRefreshEffect.of(null) });
     });
+  }
+  async activateOverview() {
+    const { workspace } = this.app;
+    let leaf = workspace.getLeavesOfType(OVERVIEW_VIEW_TYPE)[0];
+    if (!leaf) {
+      leaf = workspace.getRightLeaf(false);
+      await leaf.setViewState({ type: OVERVIEW_VIEW_TYPE, active: true });
+    }
+    workspace.revealLeaf(leaf);
+  }
+  refreshOverview() {
+    this.app.workspace.getLeavesOfType(OVERVIEW_VIEW_TYPE).forEach((leaf) => {
+      if (leaf.view && typeof leaf.view.refresh === "function")
+        leaf.view.refresh();
+    });
+  }
+  applyRibbonIcon() {
+    const want = this.settings.showRibbonIcon;
+    if (want && !this.ribbonEl) {
+      this.ribbonEl = this.addRibbonIcon("book-a", "Glossary overview", () => this.activateOverview());
+    } else if (!want && this.ribbonEl) {
+      this.ribbonEl.remove();
+      this.ribbonEl = null;
+    }
   }
 };
 Object.assign(GlossaryLinkerPlugin.prototype, matcher, highlight, actions, api);

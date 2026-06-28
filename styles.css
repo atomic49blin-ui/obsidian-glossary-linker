@@ -214,3 +214,105 @@ settings:
   color: var(--text-muted);
   text-decoration: line-through;
 }
+
+/* Overview panel (right-sidebar ItemView) */
+.glossary-overview-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.glossary-overview-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin: 4px 0 6px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.glossary-overview-controls input[type='number'] {
+  width: 4em;
+}
+
+.glossary-overview-controls select {
+  flex: 1 1 7em;
+}
+
+.glossary-overview-check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.glossary-overview-head {
+  font-weight: var(--font-semibold);
+  margin: 12px 0 4px;
+}
+
+.glossary-overview-head.is-toggle {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.glossary-overview-caret {
+  color: var(--text-muted);
+  width: 1em;
+}
+
+.glossary-overview-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.glossary-overview-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glossary-overview-name.is-link {
+  cursor: pointer;
+}
+
+.glossary-overview-name.is-link:hover {
+  color: var(--text-accent);
+  text-decoration: underline;
+}
+
+.glossary-overview-row.is-orphan .glossary-overview-name {
+  color: var(--text-muted);
+}
+
+.glossary-overview-count {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  white-space: nowrap;
+}
+
+.glossary-overview-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.glossary-overview-act {
+  cursor: pointer;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-accent);
+}
+
+.glossary-overview-empty {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  padding: 6px 0;
+}

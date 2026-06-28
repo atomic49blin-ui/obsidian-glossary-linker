@@ -1,5 +1,7 @@
 'use strict';
 
+const { Notice } = require('obsidian');
+
 // Public API exposed as `app.plugins.plugins['glossary-linker'].api`, so other
 // plugins and DataviewJS can read the glossary index. Mixed into the plugin
 // prototype; methods run with the plugin as `this`.
@@ -24,6 +26,9 @@ module.exports = {
       // Heavy: scans in-scope notes and counts occurrences per term. Call explicitly.
       getUsageReport: (opts) => this.getUsageReport(opts),
 
+      // Heavy: frequent in-scope words that are not yet terms. Call explicitly.
+      collectCandidates: (opts) => this.collectCandidates(opts),
+
       // Subscribe to index rebuilds; returns an unsubscribe function.
       onChange: (cb) => this.onIndexChange(cb),
     };
@@ -43,18 +48,27 @@ module.exports = {
     return null;
   },
 
-  // For every term, the number of plain-text occurrences across in-scope notes
-  // and which files they appear in. Terms with count 0 are orphans.
-  async getUsageReport() {
+  // For every term, how many times it is used across in-scope notes and in which
+  // files. Counts plain-text mentions; with opts.includeLinks, also direct
+  // [[Term]] / [[Term|alias]] links. Terms with count 0 are orphans.
+  async getUsageReport(opts = {}) {
     const counts = new Map();
     for (const t of this.terms || []) counts.set(t.canonical, { canonical: t.canonical, path: t.path, count: 0, files: [] });
-    const files = this.getScopeFiles();
+    const files = opts.wholeVault ? this.app.vault.getMarkdownFiles() : this.getScopeFiles();
     for (const file of files) {
-      let text;
-      try { text = await this.app.vault.cachedRead(file); } catch (e) { continue; }
       const here = new Map();
-      for (const m of this.findMatches(text, this.canonicalForPath(file.path), { protect: true })) {
-        here.set(m.canonical, (here.get(m.canonical) || 0) + 1);
+      try {
+        const text = await this.app.vault.cachedRead(file);
+        for (const m of this.findMatches(text, this.canonicalForPath(file.path), { protect: true })) {
+          here.set(m.canonical, (here.get(m.canonical) || 0) + 1);
+        }
+      } catch (e) { /* unreadable file: links below may still apply */ }
+      if (opts.includeLinks) {
+        const cache = this.app.metadataCache.getFileCache(file);
+        for (const link of (cache && cache.links) || []) {
+          const dest = this.app.metadataCache.getFirstLinkpathDest(link.link, file.path);
+          if (dest && this.isGlossaryFile(dest)) here.set(dest.basename, (here.get(dest.basename) || 0) + 1);
+        }
       }
       for (const [canonical, n] of here) {
         const entry = counts.get(canonical);
@@ -64,6 +78,51 @@ module.exports = {
       }
     }
     return [...counts.values()];
+  },
+
+  // Frequent in-scope words that are not yet terms — candidates worth defining.
+  // Pure frequency: a word is kept when its lemma appears in at least
+  // candidateMinNotes notes. Inflected forms collapse onto one lemma.
+  async collectCandidates(opts = {}) {
+    const minLen = Math.max(1, this.settings.minTermLength || 1);
+    const minNotes = Math.max(1, this.settings.candidateMinNotes || 1);
+    const groups = new Map(); // lemma -> { forms: Map<surface, count>, total, files: Set }
+    const files = opts.wholeVault ? this.app.vault.getMarkdownFiles() : this.getScopeFiles();
+    const notice = new Notice('Glossary Linker: scanning…', 0);
+    try {
+      for (let i = 0; i < files.length; i++) {
+        if (i % 25 === 0) notice.setMessage(`Glossary Linker: scanning ${i + 1}/${files.length}…`);
+        let text;
+        try { text = await this.app.vault.cachedRead(files[i]); } catch (e) { continue; }
+        const protect = this.computeProtected(text);
+        for (const m of text.matchAll(/[\p{L}\p{Nd}]+/gu)) {
+          const raw = m[0];
+          if (/^\p{Nd}+$/u.test(raw)) continue;
+          if (this.overlapsProtected(protect, m.index, m.index + raw.length)) continue;
+          if (this.keysFor(raw).some((k) => this.index.byKey.has(k) || this.excludeWordKeys.has(k))) continue;
+          const lemma = this.lemmaFor(raw);
+          if (lemma.length < minLen) continue;
+          let g = groups.get(lemma);
+          if (!g) { g = { forms: new Map(), total: 0, files: new Set() }; groups.set(lemma, g); }
+          g.forms.set(raw, (g.forms.get(raw) || 0) + 1);
+          g.total++;
+          g.files.add(files[i].path);
+        }
+      }
+    } finally {
+      notice.hide();
+    }
+
+    const out = [];
+    for (const [lemma, g] of groups) {
+      if (g.files.size < minNotes) continue;
+      // Show the most common surface form rather than the (sometimes odd) stem.
+      let display = lemma, best = -1;
+      for (const [form, n] of g.forms) if (n > best) { best = n; display = form; }
+      out.push({ lemma, display, count: g.total, docFreq: g.files.size });
+    }
+    out.sort((a, b) => b.docFreq - a.docFreq || b.count - a.count);
+    return out.slice(0, 100);
   },
 
   onIndexChange(cb) {

@@ -20,6 +20,7 @@ The plugin ships as `main.js`, `manifest.json` and `styles.css`. Six language mo
   - [Collect aliases from links you made](#collect-aliases-from-links-you-made)
   - [Suggest links as you type](#suggest-links-as-you-type-optional)
   - [Ambiguous terms](#ambiguous-terms)
+  - [Glossary overview](#glossary-overview)
 - [Morphology and languages](#morphology-and-languages)
   - [Which scripts fit](#which-scripts-fit)
   - [Adding a language](#adding-a-language)
@@ -44,7 +45,7 @@ The highlights behave like real internal links, in both Reading view and the edi
 
 - hover shows the term's page preview (following your *Page Preview* settings, with or without a modifier key);
 - click opens the glossary note — in the editor a plain click just places the cursor, Ctrl/Cmd+click follows the term, and middle-click opens it in a new tab;
-- right-click opens an actions menu — link to term, exclude the word or term, open the note, and more (see [Commands](#commands-command-palette-ctrlp)). Each group can be hidden under *Settings → Context menu*; with all off, right-click shows the native menu.
+- right-click opens an actions menu — link to term, exclude the word or term, open the note, and more (see [Commands](#commands-command-palette-ctrlp)). Each group can be hidden under *Settings → Context menu*; with all off, right-click shows the native menu. On mobile, a long-press opens this menu (there's no hover preview).
 
 <p align="center">
   <img src="docs/images/context-menu.png" alt="The right-click menu on a highlighted term" width="240">
@@ -121,6 +122,19 @@ When a word matches more than one glossary term (the same alias lives on two not
   <br><sub>Acting on it asks which term you meant.</sub>
 </p>
 
+### Glossary overview
+
+A right-sidebar panel (the *Open glossary overview* command, or the ribbon icon) for the whole glossary at once, in two lists:
+
+<p align="center">
+  <img src="docs/images/overview.png" alt="The glossary overview panel: a Terms list with usage counts and orphans, and a Candidates list of frequent words not yet defined" width="320">
+</p>
+
+- **Terms** — every indexed term with how often it's used across in-scope notes; sort by usage or by name. The count is plain-text mentions, plus existing `[[Term]]` links when *count links* is ticked (on by default — so a term you've already linked everywhere isn't mistaken for unused). Terms with no uses are flagged as orphans. Click a term to open it (middle-click for a new tab), or use *link all* to link its occurrences across the vault.
+- **Candidates** — frequent words that are *not* terms yet, so you can spot what's worth defining. Each shows how many notes it appears in and its total uses; sort by either, and set the *Min notes* threshold in the panel. Per candidate: create a term from it, or dismiss it with ✕ (which adds it to *Excluded words*, so it stays out of future scans). Collapse the section to skip the (heavier) candidate scan.
+
+Both lists come from scanning your notes, so they refresh on demand — hit *Rescan* after a round of edits. By default the scan follows the linker's [Link scope](#settings); tick *whole vault* in the panel header to scan every note regardless of scope.
+
 ## Morphology and languages
 
 Morphology is modular. Six language modules are bundled in by default, and you can add more and rebuild (see [Adding a language](#adding-a-language)). Each one is validated against the module contract on load and gets a toggle in settings (*Matching → Languages*). For a given word, the keys from every enabled language that claims it are combined, so same-script languages like English, Spanish, German and French all contribute on a Latin word. If no language claims a word, it's matched exactly (lowercased), with no morphology.
@@ -159,6 +173,7 @@ Every module is validated against the contract on load (`src/language-api.js`). 
 - **Unlink glossary terms: this note / selection / all notes** — the reverse of *Link glossary terms*: each `[[Title|word]]` pointing at a glossary note becomes plain `word` again, previewed first. Links inside code or frontmatter, links you wrote to a specific heading (`[[Term#section]]`), and links to non-glossary notes are left untouched.
 - **Collect aliases from links: this note / all notes**
 - **Create glossary term from selection** — creates a note in the glossary folder named after the selected text, and links the selection to it
+- **Open glossary overview** — the right-sidebar panel (see [Glossary overview](#glossary-overview))
 - **Rebuild glossary index**
 
 You can also act on a highlighted term from its right-click menu: *Link to term*, *Link all "…" to term: this note*, *Link all "…" to term: all notes* (the last previews changes across the whole vault), plus *Add "…" to excluded words* / *Add "…" to excluded terms* to quickly suppress a false match. Each exclude item is reversible: right-click a word or link that's already excluded and the same item reads *Remove "…" from excluded words / terms*. Right-click an existing glossary **link** for *Glossary: unlink this term* (turn just that link back into plain text) and *Glossary: collect this alias* (add this one link's wording as an alias for its term). Right-click a plain-text **selection** for *Glossary: create term & link* (create the term note and replace the selection with a link), *Glossary: create term* (just create and open it), and *Glossary: add "…" to excluded words* (suppress that word, term or not). Right-click anywhere else in the editor — empty space or a link — for *Glossary: collect aliases from links (this note)*. Each of these groups can be toggled off under *Settings → Context menu*.
@@ -245,6 +260,13 @@ The highlight's color, underline style and offset — plus a separate underline 
 | **"Create term from selection" items** | on | show the *Glossary: create term…* actions when right-clicking a selection |
 | **"Unlink term" item** | on | show *Glossary: unlink this term* when right-clicking an existing glossary link |
 
+**Overview**
+| Setting | Default | Description |
+|---|---|---|
+| **Ribbon icon** | on | show a ribbon button that opens the [Glossary overview](#glossary-overview) panel; the *Open glossary overview* command works either way |
+
+The candidate threshold (*Min notes*) and the term sort live in the panel's own header, not here.
+
 ## Skipped contexts
 
 Code blocks (``` and `~~~`), inline code, frontmatter, existing `[[...]]` and `[..](..)` links, and URLs are left untouched. A term is never linked inside its own note. In Reading view, links and (optionally) headings are skipped by DOM ancestry; in the editor, by the CM6 syntax tree. When a link is written into a Markdown table cell, the alias pipe is escaped (`[[Term\|word]]`) so the table isn't broken.
@@ -263,7 +285,8 @@ The plugin exposes a small read-only API at `app.plugins.plugins['glossary-linke
 | `resolveTerm(name)` | the term a title or alias (case-insensitive) belongs to, or `null` |
 | `keysFor(word)` / `lemmaFor(word)` | the morphology keys / base form of a word, same engine the matcher uses |
 | `findMatches(text)` | glossary matches in arbitrary text (protected spans skipped) |
-| `getUsageReport()` | async; per term, how many plain-text occurrences across in-scope notes and in which files — terms with `count: 0` are orphans |
+| `getUsageReport(opts?)` | async; per term, how many occurrences across in-scope notes and in which files — terms with `count: 0` are orphans. Counts plain-text mentions; pass `{ includeLinks: true }` to also count direct `[[Term]]` links |
+| `collectCandidates()` | async; frequent in-scope words that are not yet terms: `{ lemma, display, count, docFreq }`, ordered by how many notes they appear in |
 | `onChange(cb)` | subscribe to index rebuilds; returns an unsubscribe function |
 
 A "glossary dashboard" in DataviewJS, for example:

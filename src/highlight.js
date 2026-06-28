@@ -1,5 +1,24 @@
 'use strict';
 
+const { Platform } = require('obsidian');
+
+// On touch there is no right-click or hover, so a held press stands in for the context
+// menu: it re-dispatches a `contextmenu` event, reusing the existing menu handlers below.
+// (If a device already fires `contextmenu` on long-press natively this is redundant —
+// verify on device.) A plain tap is shorter than the timer, so it still opens / edits.
+const LONG_PRESS_MS = 500;
+const fireContextMenu = (el, x, y) => el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: x, clientY: y }));
+
+function longPressTracker(fire) {
+  let timer = null, x = 0, y = 0, target = null;
+  const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+  return {
+    start(t, el) { target = el; x = t.clientX; y = t.clientY; timer = setTimeout(() => { timer = null; fire(target, x, y); }, LONG_PRESS_MS); },
+    move(t) { if (timer && (Math.abs(t.clientX - x) > 10 || Math.abs(t.clientY - y) > 10)) cancel(); },
+    cancel,
+  };
+}
+
 // Highlighting in Reading view (DOM) and in the editor (CM6). Mixed into the plugin prototype.
 module.exports = {
   processReadingMode(el, ctx) {
@@ -79,6 +98,13 @@ module.exports = {
         }
         if (this.showLinkMenu(e, canonical, display, file, null, occurrence, m.alts)) e.stopPropagation();
       });
+      if (Platform.isMobile) {
+        const lp = longPressTracker(fireContextMenu);
+        a.addEventListener('touchstart', (e) => lp.start(e.touches[0], a), { passive: true });
+        a.addEventListener('touchmove', (e) => lp.move(e.touches[0]), { passive: true });
+        a.addEventListener('touchend', lp.cancel);
+        a.addEventListener('touchcancel', lp.cancel);
+      }
       frag.appendChild(a);
       cursor = m.end;
     }
@@ -146,6 +172,7 @@ module.exports = {
     const targetEl = (e) => (e.target instanceof HTMLElement ? e.target.closest('.cm-glossary-link') : null);
     const canonicalOf = (el) => el.getAttribute('data-glossary-target');
     const altsOf = (el) => { const v = el.getAttribute('data-glossary-alts'); return v ? v.split('\n') : null; };
+    const editorLp = longPressTracker(fireContextMenu);
 
     const vp = ViewPlugin.fromClass(
       class {
@@ -197,6 +224,14 @@ module.exports = {
             const file = plugin.app.workspace.getActiveFile();
             plugin.showLinkMenu(e, canonicalOf(el), el.textContent, file, view.posAtDOM(el), undefined, altsOf(el));
           },
+          touchstart(e) {
+            if (!Platform.isMobile) return;
+            const el = targetEl(e);
+            if (el) editorLp.start(e.touches[0], el);
+          },
+          touchmove(e) { editorLp.move(e.touches[0]); },
+          touchend: editorLp.cancel,
+          touchcancel: editorLp.cancel,
         },
       }
     );

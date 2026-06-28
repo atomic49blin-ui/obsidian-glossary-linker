@@ -20,6 +20,14 @@ const DEFAULT_SETTINGS = {
   linkSuggest: false, // offer [[link]] autocomplete while typing
   suggestMinChars: 3, // min typed length before autocomplete triggers
   aliasCollisionWarnings: true, // warn when a collected/created alias collides with another term
+  candidateMinNotes: 3, // overview: a candidate must appear in at least this many notes
+  overviewSort: 'usage', // overview terms order: 'usage' | 'name'
+  overviewCandidateSort: 'notes', // overview candidates order: 'notes' | 'count'
+  overviewCountLinks: true, // overview usage count also counts direct [[Term]] links
+  overviewWholeVault: false, // overview scans every note instead of the linker scope
+  overviewTermsCollapsed: false,
+  overviewCandidatesCollapsed: false,
+  showRibbonIcon: true,
   highlightInReading: true,
   editingHighlight: 'live', // 'off' | 'live' | 'onSave'
   skipHeadings: true,
