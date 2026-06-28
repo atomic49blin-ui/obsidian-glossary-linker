@@ -23,7 +23,6 @@ The plugin ships as `main.js`, `manifest.json` and `styles.css`. Six language mo
 - [Morphology and languages](#morphology-and-languages)
   - [Which scripts fit](#which-scripts-fit)
   - [Adding a language](#adding-a-language)
-  - [Alias form when collecting](#alias-form-when-collecting-aliasharvestmode)
 - [Commands](#commands-command-palette-ctrlp)
   - [Templates for new terms](#templates-for-new-terms)
 - [Settings](#settings)
@@ -41,17 +40,15 @@ The plugin ships as `main.js`, `manifest.json` and `styles.css`. Six language mo
 
 The term list comes from each glossary file's name and its `aliases`. Matching words are found even when inflected (`unit → units`, RU `юнит → юнита/юниту/юнитов`). The engine is multilingual and picks itself by the word's script: Russian for Cyrillic, English for Latin (more in [Morphology and languages](#morphology-and-languages)). Highlighting runs in Reading view and in the editor (Live or On save). Multi-word terms (`Vision radius`, hyphenated `Flow-field`) match as a whole, longest match first.
 
-In Reading view the highlights are real internal links, so they behave like ordinary `[[links]]`:
+The highlights behave like real internal links, in both Reading view and the editor:
 
-- hover shows the term's page preview (following your *Page Preview* settings, with or without Ctrl, the same as any link);
-- click opens the glossary note (Ctrl/Cmd+click for a new tab);
-- right-click opens a menu: *Turn into link*, *Turn all "…" into links: this note*, *Turn all "…" into links: all notes*, *Add "…" to excluded words*, *Add "…" to excluded terms*, *Open glossary note*, *Open in new tab*. You can hide each group under *Settings → Context menu*; turn them all off and right-click just shows the native menu.
+- hover shows the term's page preview (following your *Page Preview* settings, with or without a modifier key);
+- click opens the glossary note — in the editor a plain click just places the cursor, Ctrl/Cmd+click follows the term, and middle-click opens it in a new tab;
+- right-click opens an actions menu — link to term, exclude the word or term, open the note, and more (see [Commands](#commands-command-palette-ctrlp)). Each group can be hidden under *Settings → Context menu*; with all off, right-click shows the native menu.
 
 <p align="center">
   <img src="docs/images/context-menu.png" alt="The right-click menu on a highlighted term" width="240">
 </p>
-
-Hover previews go through Obsidian's Page Preview. The plugin registers as its own source, so glossary links show up as a *Glossary Linker* toggle under *Settings → Core plugins → Page Preview* — you can turn their previews on or off, and require a modifier key or not, independently of ordinary links.
 
 ### Turn terms into real links
 
@@ -96,6 +93,12 @@ This scans for `[[Term|some wording]]` links you wrote by hand. If `Term` is a g
   <img src="docs/images/collect-aliases-2.png" alt="The collect-aliases preview: new aliases with checkboxes, a collision flagged with a warning, and skipped candidates listed below" width="540">
 </p>
 
+**Alias form** (`aliasHarvestMode`) controls how the collected wording is stored:
+
+- **`lemma`** (default) — reduce the wording to a base (dictionary) form: EN `boxes → box`, RU `роем → рой`, `юнитов → юнит`. RU soft-stem nouns (`боем → бой`) have a dedicated rule; irregular alternations may still need a manual fix in the preview.
+- **`literal`** — store the wording as written.
+- **`both`** — store both.
+
 ### Suggest links as you type (optional)
 
 Turn on *Autocomplete → Suggest links while typing* and typing in an in-scope note offers to insert a `[[link]]` to a matching glossary term. The match can be a prefix of a term's title or alias (type `Vis` → *Vision radius*) or an inflected form of one. A prefix match inserts `[[Term]]`; an inflected form keeps your wording as `[[Term|word]]`. It's off by default and never fires inside the glossary folder, code, links or other protected spans.
@@ -106,7 +109,7 @@ Turn on *Autocomplete → Suggest links while typing* and typing in an in-scope 
 
 ### Ambiguous terms
 
-When a word matches more than one glossary term (the same alias lives on two notes), it gets a distinct wavy underline, and hovering shows a tooltip listing every matching term instead of a single, misleading page preview. Acting on it — clicking to open, or *Turn into link* / *Open* from the right-click menu — opens a small picker so you choose which term rather than silently following the first. A word that matches a single term acts immediately, as usual.
+When a word matches more than one glossary term (the same alias lives on two notes), it gets a distinct wavy underline, and hovering shows a tooltip listing every matching term instead of a single, misleading page preview. Acting on it — clicking to open, or *Link to term* / *Open* from the right-click menu — opens a small picker so you choose which term rather than silently following the first. A word that matches a single term acts immediately, as usual.
 
 <p align="center">
   <img src="docs/images/ambiguous-1.png" alt="A word with a wavy underline and a tooltip listing both matching terms" width="620">
@@ -131,7 +134,7 @@ The built-in modules are stemmer code compiled into the plugin:
 
 > Enable only the languages your vault actually uses. Since same-script languages combine, leaving German on in an English-only vault can occasionally over-stem a word. On first run the plugin enables English plus your Obsidian interface language (if a module exists for it); switch on any others you need.
 
-The mode (`matchMode`) is a global switch for all languages: `stemmer`, `endingStrip` (a light ending trim), or `exact`. Each mode's actual algorithm comes from the language module.
+The mode (`matchMode`) is a global switch for all languages: `stemmer`, `endingStrip` (a light ending trim), or `exact`. Each mode's actual algorithm comes from the language module. A separate setting, *Alias form* (`aliasHarvestMode`), controls how *collected* aliases are stored — see [Collect aliases from links you made](#collect-aliases-from-links-you-made).
 
 ### Which scripts fit
 
@@ -150,22 +153,17 @@ A language is a small JavaScript module bundled into `main.js` at build time; no
 
 Every module is validated against the contract on load (`src/language-api.js`). A module that doesn't export an object with a valid `id` / `name` / `match` / `keys` is dropped and listed under *Languages* with a ⚠ marker and the reason, so the index keeps working and a mistake is easy to spot.
 
-### Alias form when collecting (`aliasHarvestMode`)
-
-- **`lemma`** (default) — reduce the wording to a base (dictionary) form: EN `boxes → box`, RU `роем → рой`, `юнитов → юнит`. RU soft-stem nouns (`боем → бой`) have a dedicated rule; irregular alternations may still need a manual fix in the preview.
-- **`literal`** — store the wording as written.
-- **`both`** — store both.
-
 ## Commands (command palette, Ctrl+P)
 
-- **Turn terms into links: this note / selection / all notes**
+- **Link glossary terms: this note / selection / all notes**
+- **Unlink glossary terms: this note / selection / all notes** — the reverse of *Link glossary terms*: each `[[Title|word]]` pointing at a glossary note becomes plain `word` again, previewed first. Links inside code or frontmatter, links you wrote to a specific heading (`[[Term#section]]`), and links to non-glossary notes are left untouched.
 - **Collect aliases from links: this note / all notes**
 - **Create glossary term from selection** — creates a note in the glossary folder named after the selected text, and links the selection to it
 - **Rebuild glossary index**
 
-You can also act on a highlighted term from its right-click menu: *Turn into link*, *Turn all "…" into links: this note*, *Turn all "…" into links: all notes* (the last previews changes across the whole vault), plus *Add "…" to excluded words* / *Add "…" to excluded terms* to quickly suppress a false match. Right-click a plain-text **selection** for *Glossary: create term & link* (create the term note and replace the selection with a link), *Glossary: create term* (just create and open it), and *Glossary: add "…" to excluded words* (suppress that word, term or not). Right-click anywhere else in the editor — empty space or a link — for *Glossary: collect aliases from links (this note)*. Each of these groups can be toggled off under *Settings → Context menu*.
+You can also act on a highlighted term from its right-click menu: *Link to term*, *Link all "…" to term: this note*, *Link all "…" to term: all notes* (the last previews changes across the whole vault), plus *Add "…" to excluded words* / *Add "…" to excluded terms* to quickly suppress a false match. Each exclude item is reversible: right-click a word or link that's already excluded and the same item reads *Remove "…" from excluded words / terms*. Right-click an existing glossary **link** for *Glossary: unlink this term* (turn just that link back into plain text) and *Glossary: collect this alias* (add this one link's wording as an alias for its term). Right-click a plain-text **selection** for *Glossary: create term & link* (create the term note and replace the selection with a link), *Glossary: create term* (just create and open it), and *Glossary: add "…" to excluded words* (suppress that word, term or not). Right-click anywhere else in the editor — empty space or a link — for *Glossary: collect aliases from links (this note)*. Each of these groups can be toggled off under *Settings → Context menu*.
 
-A status-bar counter (e.g. `3 terms`) shows how many glossary terms are on the current note: plain-text mentions plus, optionally, terms already linked directly. Click it to turn this note's terms into links (toggles under *Highlighting → Status bar count*).
+A status-bar counter (e.g. `3 terms`) shows how many glossary terms are on the current note: plain-text mentions plus, optionally, terms already linked directly. Click it to link this note's terms (toggles under *Highlighting → Status bar count*).
 
 ### Templates for new terms
 
@@ -191,14 +189,17 @@ Settings are grouped into sections, each with a short description in the UI. The
 |---|---|---|
 | **Glossary folder** | `glossary` | folder with the term notes (created automatically when aliases are written if it is missing); has folder autocomplete, and shows a warning / indexed-term count below it |
 | **Term template** | — | note used as the body of new term notes; tokens like `{{title}}` / `{{selection}}` / `{{date}}` are filled in (see [Templates for new terms](#templates-for-new-terms) above); empty = blank note |
-| **Link scope** | `Everywhere` | `Listed folders only` / `Everywhere except listed` / `Everywhere` |
-| **Folders to include/exclude** | — | folder list; meaning depends on the mode; shown only when the mode is not "Everywhere" |
-| **Always-excluded folders** | — | always out of scope, on top of any mode |
+| **Link scope** | `Everywhere` | `Listed paths only` (an allow-list) or `Everywhere`. To link everywhere *except* a few folders, use `Everywhere` and list them under Always-excluded below |
+| **Paths to include** | — | path list (file or folder); only these are in scope. Shown only in `Listed paths only` mode |
+| **Always-excluded paths** | — | always out of scope, on top of the mode above |
+
+You can also manage these lists from the file explorer: right-click a file or folder for *Glossary: add to always-excluded* (and the reverse once it's listed), or — in *Listed paths only* mode — *Glossary: include in scope*.
 
 **Matching**
 | Setting | Default | Description |
 |---|---|---|
 | **Morphology** | `Stemmer` | how an inflected word is matched: `Stemmer` reduces words to a root (units → unit, recommended); `Ending strip` only chops common endings (lighter); `Exact match` needs the exact spelling. The algorithm itself comes from the enabled language modules |
+| **Minimum term length** | `2` | ignore term titles and aliases shorter than this many characters, so single letters don't match everywhere |
 | **Languages** | English + interface language | per-language toggle; reorder with ↑↓ to set priority (higher in the list wins when same-script languages overlap, deciding the lemma); on first run only English and your Obsidian interface language are enabled |
 | **Link first occurrence only** | off | link only the first occurrence of each term per page |
 | **Excluded terms** | — | term titles or aliases that drop the whole matching entry from the index; a shared alias (e.g. `_toc` on every index/MOC note) drops them all at once. Use *Excluded words* to suppress a single word |
@@ -237,17 +238,16 @@ The highlight's color, underline style and offset — plus a separate underline 
 **Context menu**
 | Setting | Default | Description |
 |---|---|---|
-| **"Turn into links" items** | on | show the turn-into-link actions when right-clicking a term |
+| **"Link to term" items** | on | show the link-to-term actions when right-clicking a term |
 | **"Collect aliases" item** | on | show *Glossary: collect aliases from links (this note)* in the editor menu (empty space / a link) |
 | **"Exclude word / term" items** | on | show *Add … to excluded words / terms* when right-clicking a term |
 | **"Open glossary note" items** | on | show *Open glossary note* / *Open in new tab* when right-clicking a term (all groups off → native menu) |
 | **"Create term from selection" items** | on | show the *Glossary: create term…* actions when right-clicking a selection |
+| **"Unlink term" item** | on | show *Glossary: unlink this term* when right-clicking an existing glossary link |
 
 ## Skipped contexts
 
 Code blocks (``` and `~~~`), inline code, frontmatter, existing `[[...]]` and `[..](..)` links, and URLs are left untouched. A term is never linked inside its own note. In Reading view, links and (optionally) headings are skipped by DOM ancestry; in the editor, by the CM6 syntax tree. When a link is written into a Markdown table cell, the alias pipe is escaped (`[[Term\|word]]`) so the table isn't broken.
-
-In the editor the highlights behave like real internal links: a plain click places the cursor, Ctrl/Cmd+click follows the term, middle-click opens it in a new tab, and the hover preview honours your Page Preview modifier setting.
 
 ## Performance
 

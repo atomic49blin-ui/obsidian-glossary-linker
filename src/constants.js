@@ -3,10 +3,11 @@
 const DEFAULT_SETTINGS = {
   glossaryFolder: 'glossary',
   termTemplate: '', // path to a template note; empty = create an empty note (as before)
-  scopeMode: 'vault', // 'folders' | 'except' | 'vault'
+  scopeMode: 'vault', // 'folders' | 'vault'
   scopeFolders: '',
   excludeFolders: '',
   matchMode: 'stemmer', // 'stemmer' | 'endingStrip' | 'exact'
+  minTermLength: 2, // forms (title/alias) shorter than this are not indexed — keeps single letters from matching everywhere
   enabledLanguages: null, // null until first-run defaults are picked
   languageOrder: [], // ids in priority order (first = highest); overrides module defaults
   aliasHarvestMode: 'lemma', // 'lemma' | 'literal' | 'both'
@@ -29,6 +30,7 @@ const DEFAULT_SETTINGS = {
   menuOpen: true,
   menuCreateTerm: true,
   menuExclude: true,
+  menuUnlink: true,
 };
 
 const splitLines = (s) => (s || '').split('\n').map((x) => x.trim()).filter(Boolean);

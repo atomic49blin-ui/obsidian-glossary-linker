@@ -45,6 +45,7 @@ module.exports = {
     const canonicals = new Set();
     // Flat term list for the autocomplete prefix scan and the public API.
     const terms = [];
+    const minTermLength = Math.max(1, this.settings.minTermLength || 1);
     const excludeTerms = new Set(splitLines(this.settings.excludeTerms).map((s) => s.toLowerCase()));
     this.excludeWordKeys = new Set();
     for (const w of splitLines(this.settings.excludeWords)) {
@@ -64,6 +65,7 @@ module.exports = {
       terms.push({ canonical, path: file.path, aliases });
 
       for (const form of forms) {
+        if (form.trim().length < minTermLength) continue;
         const words = this.tokenizeForm(form);
         if (!words.length) continue;
         if (words.length === 1 && words[0].keys.some((k) => this.excludeWordKeys.has(k))) continue;
@@ -186,6 +188,22 @@ module.exports = {
     push(/(?:https?:\/\/|www\.)\S+/g);
     if (this.settings.skipHeadings) push(/^[ \t]*#{1,6}[ \t].*$/gm);
 
+    return ranges.sort((a, b) => a[0] - b[0]);
+  },
+
+  // Frontmatter and code (fenced or inline) — the spans where a [[...]] isn't a real link.
+  // Unlike computeProtected it keeps wikilinks and headings, since unlink acts on links and a
+  // link inside a heading is still real.
+  codeFrontmatterRanges(text) {
+    const ranges = [];
+    const push = (re) => { let m; while ((m = re.exec(text)) !== null) ranges.push([m.index, m.index + m[0].length]); };
+    if (/^---\r?\n/.test(text)) {
+      const end = text.indexOf('\n---', 3);
+      if (end !== -1) ranges.push([0, end + 4]);
+    }
+    push(/```[\s\S]*?```/g);
+    push(/~~~[\s\S]*?~~~/g);
+    push(/`[^`\n]+`/g);
     return ranges.sort((a, b) => a[0] - b[0]);
   },
 

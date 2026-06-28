@@ -5,6 +5,7 @@ module.exports = {
   processReadingMode(el, ctx) {
     if (!this.settings.highlightInReading) return;
     const sourcePath = ctx.sourcePath;
+    if (sourcePath && !this.inScope(sourcePath)) return;
     const currentCanonical = this.canonicalForPath(sourcePath);
 
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
@@ -30,7 +31,9 @@ module.exports = {
   decorateTextNode(node, currentCanonical, sourcePath) {
     const text = node.textContent;
     if (!text || text.length < 2) return;
-    const matches = this.findMatches(text, currentCanonical);
+    // protect:true keeps this in step with the materialize path, so the Nth
+    // highlighted occurrence here is the Nth occurrence that gets linked.
+    const matches = this.findMatches(text, currentCanonical, { protect: true });
     if (!matches.length) return;
 
     const frag = document.createDocumentFragment();
@@ -123,6 +126,8 @@ module.exports = {
 
     const buildDeco = (editorView) => {
       const builder = new RangeSetBuilder();
+      const activeFile = plugin.app.workspace.getActiveFile();
+      if (activeFile && !plugin.inScope(activeFile.path)) return builder.finish();
       const currentCanonical = plugin.activeCanonical();
       const tree = syntaxTree(editorView.state);
       for (const { from, to } of editorView.visibleRanges) {

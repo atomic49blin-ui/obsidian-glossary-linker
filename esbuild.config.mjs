@@ -1,8 +1,9 @@
 import esbuild from 'esbuild';
+import { existsSync, copyFileSync } from 'fs';
 
 const banner = '/* Glossary Linker — bundled from src/ by esbuild. Do not edit directly; edit src/ and run "npm run build". */';
 
-esbuild.build({
+await esbuild.build({
   entryPoints: ['src/main.js'],
   bundle: true,
   format: 'cjs',
@@ -17,3 +18,11 @@ esbuild.build({
   ],
   logLevel: 'info',
 }).catch((e) => { console.error(e); process.exit(1); });
+
+let deployTargets = [];
+try { ({ deployTargets = [] } = await import('./esbuild.local.mjs')); } catch { /* no local config */ }
+for (const dir of deployTargets) {
+  if (!existsSync(dir)) continue;
+  for (const f of ['main.js', 'manifest.json', 'styles.css']) copyFileSync(f, `${dir}/${f}`);
+  console.log(`Deployed to ${dir}`);
+}

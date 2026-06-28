@@ -11,7 +11,13 @@ class GlossaryLinkerSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     const s = this.plugin.settings;
-    const save = async (rebuild) => { await this.plugin.saveSettings(); if (rebuild) this.plugin.rebuildIndex(); };
+    // A rebuild changes what matches, so also refresh open views and the status bar.
+    const save = async (rebuild) => {
+      await this.plugin.saveSettings();
+      if (rebuild) { this.plugin.rebuildIndex(); this.plugin.rerenderViews(); this.plugin.updateStatusBar(); }
+    };
+    // Scope changes don't touch the term index, so refresh views without a rebuild.
+    const saveScope = async () => { await this.plugin.saveSettings(); this.plugin.rerenderViews(); this.plugin.updateStatusBar(); };
 
     containerEl.createEl('h3', { text: 'Scope' });
 
@@ -26,13 +32,9 @@ class GlossaryLinkerSettingTab extends PluginSettingTab {
     this.folderStatusEl = containerEl.createEl('div', { cls: 'glossary-section-desc' });
     this.renderFolderStatus();
 
-    const tplDesc = document.createDocumentFragment();
-    tplDesc.append('Path to a note used as the body for new terms (folder and file name stay controlled by the plugin). ');
-    tplDesc.append('Placeholders: {{title}}, {{selection}}, {{source}}, {{sourcePath}}, {{date}}, {{date:YYYY-MM-DD}}, {{time}}. ');
-    tplDesc.append('Leave empty for a blank note — Templater users can leave this empty and use a Templater folder template on the glossary folder instead. Use one or the other, not both.');
     new Setting(containerEl)
       .setName('Term template')
-      .setDesc(tplDesc)
+      .setDesc('Note used as the body of new term notes; placeholders like {{title}} and {{date}} are filled in. Empty = blank note.')
       .addText((t) => {
         t.setValue(s.termTemplate).onChange(async (v) => { s.termTemplate = v.trim(); await save(false); });
         if (folderSuggestAvailable()) new FileSuggest(this.app, t.inputEl);
@@ -42,25 +44,22 @@ class GlossaryLinkerSettingTab extends PluginSettingTab {
       .setName('Link scope')
       .setDesc('Which notes terms are highlighted and linked in.')
       .addDropdown((d) => d
-        .addOption('folders', 'Listed folders only')
-        .addOption('except', 'Everywhere except listed')
+        .addOption('folders', 'Listed paths only')
         .addOption('vault', 'Everywhere')
         .setValue(s.scopeMode)
-        .onChange(async (v) => { s.scopeMode = v; await save(false); this.display(); }));
+        .onChange(async (v) => { s.scopeMode = v; await saveScope(); this.display(); }));
 
-    if (s.scopeMode !== 'vault') {
+    if (s.scopeMode === 'folders') {
       new Setting(containerEl)
-        .setName(s.scopeMode === 'except' ? 'Folders to exclude' : 'Folders to include')
-        .setDesc(s.scopeMode === 'except'
-          ? 'One folder path per line. These folders are skipped; everything else is in scope.'
-          : 'One folder path per line. Only notes inside these folders are in scope.')
-        .addTextArea((t) => { t.setValue(s.scopeFolders).onChange(async (v) => { s.scopeFolders = v; await save(false); }); t.inputEl.rows = 5; });
+        .setName('Paths to include')
+        .setDesc('One path per line — a file or a folder. Only these (and notes inside listed folders) are in scope. To exclude folders instead, use "Everywhere" and the Always-excluded paths below.')
+        .addTextArea((t) => { t.setValue(s.scopeFolders).onChange(async (v) => { s.scopeFolders = v; await saveScope(); }); t.inputEl.rows = 5; });
     }
 
     new Setting(containerEl)
-      .setName('Always-excluded folders')
-      .setDesc('One folder path per line, never highlighted, linked or scanned, whatever the mode above is.')
-      .addTextArea((t) => { t.setValue(s.excludeFolders).onChange(async (v) => { s.excludeFolders = v; await save(false); }); t.inputEl.rows = 3; });
+      .setName('Always-excluded paths')
+      .setDesc('One path per line — a file or a folder, never highlighted, linked or scanned, whatever the mode above is.')
+      .addTextArea((t) => { t.setValue(s.excludeFolders).onChange(async (v) => { s.excludeFolders = v; await saveScope(); }); t.inputEl.rows = 3; });
 
     containerEl.createEl('h3', { text: 'Matching' });
 
@@ -73,6 +72,11 @@ class GlossaryLinkerSettingTab extends PluginSettingTab {
         .addOption('exact', 'Exact match')
         .setValue(s.matchMode)
         .onChange(async (v) => { s.matchMode = v; await save(true); }));
+
+    new Setting(containerEl)
+      .setName('Minimum term length')
+      .setDesc('Ignore term titles and aliases shorter than this many characters, so single letters do not match everywhere.')
+      .addText((t) => { t.inputEl.type = 'number'; t.inputEl.min = '1'; t.setValue(String(s.minTermLength)).onChange(async (v) => { const n = parseInt(v, 10); s.minTermLength = Number.isFinite(n) && n > 0 ? n : 1; await save(true); }); });
 
     const langs = this.plugin.languages;
     const errors = this.plugin.languageErrors || [];
@@ -217,8 +221,8 @@ class GlossaryLinkerSettingTab extends PluginSettingTab {
     containerEl.createEl('h3', { text: 'Context menu' });
 
     new Setting(containerEl)
-      .setName('"Turn into links" items')
-      .setDesc('Show the "Turn into link" / "Turn all … into links" actions when right-clicking a highlighted term.')
+      .setName('"Link to term" items')
+      .setDesc('Show the "Link to term" / "Link all … to term" actions when right-clicking a highlighted term.')
       .addToggle((t) => t.setValue(s.menuTurnInto).onChange(async (v) => { s.menuTurnInto = v; await save(false); }));
 
     new Setting(containerEl)
@@ -240,6 +244,11 @@ class GlossaryLinkerSettingTab extends PluginSettingTab {
       .setName('"Create term from selection" items')
       .setDesc('Show the "Glossary: create term…" actions when right-clicking a plain text selection.')
       .addToggle((t) => t.setValue(s.menuCreateTerm).onChange(async (v) => { s.menuCreateTerm = v; await save(false); }));
+
+    new Setting(containerEl)
+      .setName('"Unlink term" item')
+      .setDesc('Show "Glossary: unlink this term" when right-clicking an existing glossary link.')
+      .addToggle((t) => t.setValue(s.menuUnlink).onChange(async (v) => { s.menuUnlink = v; await save(false); }));
 
     containerEl.createEl('h3', { text: 'Maintenance' });
 

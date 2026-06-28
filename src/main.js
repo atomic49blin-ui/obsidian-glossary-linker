@@ -1,6 +1,6 @@
 'use strict';
 
-const { Plugin, Notice, debounce } = require('obsidian');
+const { Plugin, Notice, TFile, TFolder, debounce } = require('obsidian');
 const { DEFAULT_SETTINGS, splitLines, sanitizeFolder } = require('./constants');
 const BUILTIN_LANGUAGES = require('./builtin-languages');
 const { validateLanguage } = require('./language-api');
@@ -73,31 +73,59 @@ class GlossaryLinkerPlugin extends Plugin {
       const sel = editor.getSelection().trim();
       const hasSel = !!sel && !sel.includes('\n');
 
-      if (this.settings.menuCreateTerm && hasSel) {
+      // A right-click on a link in a table cell selects the cell text, so resolve the link
+      // regardless of selection; its actions take precedence over the selection ones.
+      const link = this.glossaryLinkAt(editor);
+
+      if (this.settings.menuCreateTerm && hasSel && !link) {
         menu.addItem((i) => i.setTitle('Glossary: create term & link').setIcon('plus-circle')
           .onClick(() => this.createTermFromSelection(editor, true)));
         menu.addItem((i) => i.setTitle('Glossary: create term').setIcon('file-plus')
           .onClick(() => this.createTermFromSelection(editor, false)));
       }
-      if (this.settings.menuExclude && hasSel) {
-        menu.addItem((i) => i.setTitle(`Glossary: add "${sel}" to excluded words`).setIcon('ban')
-          .onClick(() => this.addToExclusion('excludeWords', sel.toLowerCase())));
+      if (this.settings.menuExclude && hasSel && !link) {
+        this.addExclusionMenuItem(menu, 'excludeWords', sel, 'Glossary: ');
       }
-      // Right-clicking a wikilink to a glossary term (no selection): same exclude
-      // actions, targeting the link's visible text.
-      if (this.settings.menuExclude && !hasSel) {
-        const link = this.glossaryLinkAt(editor);
-        if (link) {
-          menu.addItem((i) => i.setTitle(`Glossary: add "${link.display}" to excluded words`).setIcon('ban')
-            .onClick(() => this.addToExclusion('excludeWords', link.display.toLowerCase())));
-          menu.addItem((i) => i.setTitle(`Glossary: add "${link.display}" to excluded terms`).setIcon('trash-2')
-            .onClick(() => this.addToExclusion('excludeTerms', link.display)));
-        }
+      // On a glossary link: exclude actions target its visible text, plus unlink and collect.
+      if (this.settings.menuExclude && link) {
+        this.addExclusionMenuItem(menu, 'excludeWords', link.display, 'Glossary: ');
+        this.addExclusionMenuItem(menu, 'excludeTerms', link.display, 'Glossary: ');
+      }
+      if (this.settings.menuUnlink && link) {
+        menu.addItem((i) => i.setTitle('Glossary: unlink this term').setIcon('unlink')
+          .onClick(() => this.unlinkLinkAt(editor, link)));
+      }
+      if (this.settings.menuCollect && link && link.targetFile) {
+        menu.addItem((i) => i.setTitle('Glossary: collect this alias').setIcon('download')
+          .onClick(() => this.harvestOneLink(link.targetFile, link.display)));
       }
       if (this.settings.menuCollect) {
         const file = this.app.workspace.getActiveFile();
         if (file) menu.addItem((i) => i.setTitle('Glossary: collect aliases from links (this note)').setIcon('download')
           .onClick(() => this.harvestFiles([file], false)));
+      }
+    }));
+
+    this.registerEvent(this.app.workspace.on('file-menu', (menu, file, source) => {
+      // Explorer file/folder actions only — not the menu from right-clicking a link to a note.
+      if (source === 'link-context-menu') return;
+      const isFolder = file instanceof TFolder;
+      if (!isFolder && !(file instanceof TFile && file.extension === 'md')) return;
+      const path = file.path;
+      const noun = isFolder ? 'folder' : 'file';
+      const item = (title, icon, listKey, add) => menu.addItem((i) => i.setTitle(title).setIcon(icon)
+        .onClick(() => this.setPathInList(listKey, path, add)));
+
+      if (this.pathListed('excludeFolders', path)) {
+        item('Glossary: remove from always-excluded', 'rotate-ccw', 'excludeFolders', false);
+      } else {
+        item(`Glossary: add ${noun} to always-excluded`, 'ban', 'excludeFolders', true);
+      }
+
+      if (this.settings.scopeMode === 'folders') {
+        const listed = this.pathListed('scopeFolders', path);
+        if (listed) item(`Glossary: remove ${noun} from scope`, 'folder-minus', 'scopeFolders', false);
+        else item(`Glossary: include ${noun} in scope`, 'folder-plus', 'scopeFolders', true);
       }
     }));
 
@@ -112,18 +140,33 @@ class GlossaryLinkerPlugin extends Plugin {
 
     this.addCommand({
       id: 'materialize-current',
-      name: 'Turn terms into links: this note',
+      name: 'Link glossary terms: this note',
       callback: () => this.materializeCurrent(),
     });
     this.addCommand({
       id: 'materialize-selection',
-      name: 'Turn terms into links: selection',
+      name: 'Link glossary terms: selection',
       editorCallback: (editor) => this.materializeSelection(editor),
     });
     this.addCommand({
       id: 'materialize-scope',
-      name: 'Turn terms into links: all notes',
+      name: 'Link glossary terms: all notes',
       callback: () => this.materializeScope(),
+    });
+    this.addCommand({
+      id: 'unlink-current',
+      name: 'Unlink glossary terms: this note',
+      callback: () => this.unlinkCurrent(),
+    });
+    this.addCommand({
+      id: 'unlink-selection',
+      name: 'Unlink glossary terms: selection',
+      editorCallback: (editor) => this.unlinkSelection(editor),
+    });
+    this.addCommand({
+      id: 'unlink-scope',
+      name: 'Unlink glossary terms: all notes',
+      callback: () => this.unlinkScope(),
     });
     this.addCommand({
       id: 'harvest-current',
@@ -226,7 +269,7 @@ class GlossaryLinkerPlugin extends Plugin {
       }
       const n = canon.size;
       el.setText(`${n} term${n === 1 ? '' : 's'}`);
-      el.setAttribute('aria-label', `${n} glossary term(s) on this page — click to turn into links`);
+      el.setAttribute('aria-label', `${n} glossary term(s) on this page — click to link them`);
     } catch (e) {
       clear();
     }
@@ -253,23 +296,39 @@ class GlossaryLinkerPlugin extends Plugin {
     return base.replace(/\.md$/, '');
   }
 
-  // The wikilink under the cursor if it points to a glossary term: { canonical, display }, else null.
+  // Parse the inside of a [[...]] into { target, display, hasSubpath }. Mirrors the
+  // table-escape (\| separator) and #subpath handling so every link-reading path agrees.
+  parseWikiInner(inner) {
+    const pipe = inner.indexOf('|');
+    const rawTarget = (pipe >= 0 ? inner.slice(0, pipe) : inner).replace(/\\$/, '').trim();
+    const hasSubpath = rawTarget.includes('#');
+    const target = rawTarget.replace(/#.*$/, '').trim();
+    const display = (pipe >= 0 ? inner.slice(pipe + 1) : target).trim();
+    return { target, display, hasSubpath };
+  }
+
+  // The wikilink the cursor or selection touches if it points to a glossary term, else null.
+  // Spanning the selection (not just a point) is what catches a link in a table cell, where a
+  // right-click selects the cell text instead of placing a bare cursor.
   glossaryLinkAt(editor) {
-    const pos = editor.getCursor();
-    const line = editor.getLine(pos.line);
+    const head = editor.getCursor('head');
+    const from = editor.getCursor('from');
+    const to = editor.getCursor('to');
+    const lineNo = head.line;
+    const line = editor.getLine(lineNo);
+    const selStart = from.line === lineNo ? from.ch : 0;
+    const selEnd = to.line === lineNo ? to.ch : line.length;
     const re = /\[\[([^\]\n]+)\]\]/g;
     let m;
     while ((m = re.exec(line)) !== null) {
-      if (pos.ch < m.index || pos.ch > m.index + m[0].length) continue;
-      const inner = m[1];
-      const pipe = inner.indexOf('|');
-      // Strip an escaped-pipe backslash (table cells) and any #subpath from the target.
-      const target = (pipe >= 0 ? inner.slice(0, pipe) : inner).replace(/\\$/, '').replace(/#.*$/, '').trim();
-      const display = (pipe >= 0 ? inner.slice(pipe + 1) : target).trim();
+      const s = m.index;
+      const e = m.index + m[0].length;
+      if (selEnd < s || selStart > e) continue;
+      const { target, display } = this.parseWikiInner(m[1]);
       if (!target) continue;
       const sourcePath = this.app.workspace.getActiveFile() ? this.app.workspace.getActiveFile().path : '';
       const dest = this.app.metadataCache.getFirstLinkpathDest(target, sourcePath);
-      if (dest && this.isGlossaryFile(dest)) return { canonical: dest.basename, display };
+      if (dest && this.isGlossaryFile(dest)) return { canonical: dest.basename, display, targetFile: dest, line: lineNo, from: s, to: e };
     }
     return null;
   }
@@ -294,10 +353,17 @@ class GlossaryLinkerPlugin extends Plugin {
   }
 
   inTableCell(text, pos) {
-    const ls = text.lastIndexOf('\n', pos - 1) + 1;
-    let le = text.indexOf('\n', pos);
-    if (le === -1) le = text.length;
-    return text.slice(ls, le).includes('|');
+    const lines = text.split('\n');
+    const lineIdx = (text.slice(0, pos).match(/\n/g) || []).length;
+    if (!lines[lineIdx] || !lines[lineIdx].includes('|')) return false;
+    // Only a real GFM table escapes the pipe: the block of non-blank lines around this one
+    // must hold a delimiter row like "| --- | :--: |". A lone pipe in prose stays literal.
+    const isDelimiter = (l) => l.includes('|') && l.includes('-') && /^[\s|:-]+$/.test(l);
+    let top = lineIdx, bot = lineIdx;
+    while (top > 0 && lines[top - 1].trim() !== '') top--;
+    while (bot < lines.length - 1 && lines[bot + 1].trim() !== '') bot++;
+    for (let i = top; i <= bot; i++) if (isDelimiter(lines[i])) return true;
+    return false;
   }
 
   // Replace each match (sorted, non-overlapping) with a wikilink, right to left.
@@ -312,6 +378,24 @@ class GlossaryLinkerPlugin extends Plugin {
     return { newText: out, changes };
   }
 
+  // Inverse of applyLinks: replace each glossary link span with its plain display text,
+  // right to left. The display has no pipe, so a table cell survives without escaping.
+  unlinkLinks(text, links) {
+    const sorted = links.slice().sort((a, b) => a.start - b.start);
+    let out = text;
+    for (let j = sorted.length - 1; j >= 0; j--) {
+      out = out.slice(0, sorted[j].start) + sorted[j].display + out.slice(sorted[j].end);
+    }
+    return { newText: out, count: sorted.length };
+  }
+
+  // Unlink the single glossary link under the cursor (from glossaryLinkAt).
+  unlinkLinkAt(editor, link) {
+    editor.replaceRange(link.display, { line: link.line, ch: link.from }, { line: link.line, ch: link.to });
+    new Notice('Glossary Linker: unlinked');
+    this.updateStatusBar();
+  }
+
   openTerm(canonical, sourcePath, newTab) {
     this.app.workspace.openLinkText(canonical, sourcePath || '', newTab);
   }
@@ -323,18 +407,32 @@ class GlossaryLinkerPlugin extends Plugin {
   }
 
   inScope(path) {
-    for (const ex of splitLines(this.settings.excludeFolders)) {
-      if (path === ex || path.startsWith(ex + '/')) return false;
-    }
-    const folders = splitLines(this.settings.scopeFolders);
-    const inFolders = folders.some((lf) => path.startsWith(lf + '/'));
-    if (this.settings.scopeMode === 'folders') return inFolders;
-    if (this.settings.scopeMode === 'except') return !inFolders;
+    const covers = (entry) => path === entry || path.startsWith(entry + '/');
+    if (splitLines(this.settings.excludeFolders).some(covers)) return false;
+    if (this.settings.scopeMode === 'folders') return splitLines(this.settings.scopeFolders).some(covers);
     return true;
   }
 
   getScopeFiles() {
     return this.app.vault.getMarkdownFiles().filter((f) => this.inScope(f.path));
+  }
+
+  pathListed(listKey, path) {
+    const entry = sanitizeFolder(path);
+    return !!entry && splitLines(this.settings[listKey]).some((l) => sanitizeFolder(l) === entry);
+  }
+
+  // Scope only affects which notes get linked, so a rerender — not a rebuild — is enough.
+  async setPathInList(listKey, path, add) {
+    const entry = sanitizeFolder(path);
+    if (!entry || add === this.pathListed(listKey, path)) return;
+    const lines = splitLines(this.settings[listKey]);
+    this.settings[listKey] = (add ? [...lines, entry] : lines.filter((l) => sanitizeFolder(l) !== entry)).join('\n');
+    await this.saveSettings();
+    this.rerenderViews();
+    this.updateStatusBar();
+    const where = listKey === 'excludeFolders' ? 'always-excluded paths' : 'paths in scope';
+    new Notice(`Glossary Linker: ${add ? 'added' : 'removed'} "${entry}" ${add ? 'to' : 'from'} ${where}`);
   }
 
   rerenderViews() {
