@@ -28,6 +28,30 @@ class FolderSuggest extends AbstractInputSuggest {
   }
 }
 
+class FileSuggest extends AbstractInputSuggest {
+  constructor(app, inputEl) {
+    super(app, inputEl);
+    this.inputEl = inputEl;
+  }
+
+  getSuggestions(query) {
+    const q = query.toLowerCase();
+    return this.app.vault.getMarkdownFiles()
+      .filter((f) => f.path.toLowerCase().includes(q))
+      .slice(0, 50);
+  }
+
+  renderSuggestion(file, el) {
+    el.setText(file.path);
+  }
+
+  selectSuggestion(file) {
+    this.setValue(file.path);
+    this.inputEl.trigger('input');
+    this.close();
+  }
+}
+
 const folderSuggestAvailable = () => typeof AbstractInputSuggest === 'function';
 
-module.exports = { FolderSuggest, folderSuggestAvailable };
+module.exports = { FolderSuggest, FileSuggest, folderSuggestAvailable };

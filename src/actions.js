@@ -1,6 +1,6 @@
 'use strict';
 
-const { Menu, Notice } = require('obsidian');
+const { Menu, Notice, TFile, moment } = require('obsidian');
 const { splitLines } = require('./constants');
 const { MaterializePreviewModal, HarvestPreviewModal, ChooseTermModal } = require('./modals');
 
@@ -122,7 +122,10 @@ module.exports = {
     if (file) {
       new Notice(`Glossary Linker: term "${name}" already exists`);
     } else {
-      try { file = await this.app.vault.create(path, ''); }
+      try {
+        const content = await this.buildTermContent(name, sel);
+        file = await this.app.vault.create(path, content);
+      }
       catch (e) { new Notice('Glossary Linker: could not create term note'); return; }
     }
 
@@ -130,6 +133,33 @@ module.exports = {
     this.rebuildIndex();
     this.updateStatusBar();
     await this.app.workspace.getLeaf('tab').openFile(file);
+  },
+
+  async buildTermContent(name, sel) {
+    const tplPath = (this.settings.termTemplate || '').trim();
+    if (!tplPath) return '';
+    const tpl = this.app.vault.getAbstractFileByPath(tplPath);
+    if (!(tpl instanceof TFile)) {
+      new Notice(`Glossary Linker: template not found: ${tplPath}`);
+      return '';
+    }
+    let text;
+    try { text = await this.app.vault.read(tpl); }
+    catch (e) { new Notice('Glossary Linker: could not read template'); return ''; }
+    return this.applyTermPlaceholders(text, name, sel);
+  },
+
+  applyTermPlaceholders(text, name, sel) {
+    const src = this.app.workspace.getActiveFile();
+    const m = (() => { try { return moment ? moment() : null; } catch (e) { return null; } })();
+    const fmt = (f, fallback) => (m ? m.format(f) : fallback());
+    return text
+      .replace(/\{\{\s*title\s*\}\}/g, name)
+      .replace(/\{\{\s*selection\s*\}\}/g, sel)
+      .replace(/\{\{\s*source\s*\}\}/g, src ? src.basename : '')
+      .replace(/\{\{\s*sourcePath\s*\}\}/g, src ? src.path : '')
+      .replace(/\{\{\s*date(?::([^}]*))?\s*\}\}/g, (_, f) => fmt((f || 'YYYY-MM-DD').trim(), () => new Date().toISOString().slice(0, 10)))
+      .replace(/\{\{\s*time(?::([^}]*))?\s*\}\}/g, (_, f) => fmt((f || 'HH:mm').trim(), () => new Date().toTimeString().slice(0, 5)));
   },
 
   chooseTerm(candidates, title, action) {

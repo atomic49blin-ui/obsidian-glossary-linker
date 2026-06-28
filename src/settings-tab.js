@@ -2,7 +2,7 @@
 
 const { PluginSettingTab, Setting, Notice } = require('obsidian');
 const { sanitizeFolder } = require('./constants');
-const { FolderSuggest, folderSuggestAvailable } = require('./folder-suggest');
+const { FolderSuggest, FileSuggest, folderSuggestAvailable } = require('./folder-suggest');
 
 class GlossaryLinkerSettingTab extends PluginSettingTab {
   constructor(app, plugin) { super(app, plugin); this.plugin = plugin; }
@@ -25,6 +25,18 @@ class GlossaryLinkerSettingTab extends PluginSettingTab {
 
     this.folderStatusEl = containerEl.createEl('div', { cls: 'glossary-section-desc' });
     this.renderFolderStatus();
+
+    const tplDesc = document.createDocumentFragment();
+    tplDesc.append('Path to a note used as the body for new terms (folder and file name stay controlled by the plugin). ');
+    tplDesc.append('Placeholders: {{title}}, {{selection}}, {{source}}, {{sourcePath}}, {{date}}, {{date:YYYY-MM-DD}}, {{time}}. ');
+    tplDesc.append('Leave empty for a blank note — Templater users can leave this empty and use a Templater folder template on the glossary folder instead. Use one or the other, not both.');
+    new Setting(containerEl)
+      .setName('Term template')
+      .setDesc(tplDesc)
+      .addText((t) => {
+        t.setValue(s.termTemplate).onChange(async (v) => { s.termTemplate = v.trim(); await save(false); });
+        if (folderSuggestAvailable()) new FileSuggest(this.app, t.inputEl);
+      });
 
     new Setting(containerEl)
       .setName('Link scope')

@@ -2,6 +2,7 @@
 
 const DEFAULT_SETTINGS = {
   glossaryFolder: 'glossary',
+  termTemplate: '', // path to a template note; empty = create an empty note (as before)
   scopeMode: 'vault', // 'folders' | 'except' | 'vault'
   scopeFolders: '',
   excludeFolders: '',

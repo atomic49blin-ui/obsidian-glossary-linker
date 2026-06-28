@@ -73,6 +73,21 @@ You can also act on a highlighted term from its right-click menu: *Turn into lin
 
 A status-bar counter (e.g. `3 terms`) shows how many glossary terms are on the current note — plain-text mentions plus, optionally, terms already linked directly; click it to turn this note's terms into links (toggles under *Highlighting → Status bar count*).
 
+### Templates for new terms
+
+A new term is a blank note by default. Set *Term template* to a note path to use that note as the body instead. These tokens are replaced when the term is created:
+
+- `{{title}}` — the term name
+- `{{selection}}` — the text you selected
+- `{{source}}` / `{{sourcePath}}` — the note the term was created from
+- `{{date}}`, `{{time}}` — current date/time; pass a [moment](https://momentjs.com/docs/#/displaying/format/) format as `{{date:YYYY-MM-DD}}`
+
+`{{title}}` is the selection stripped of characters that aren't allowed in file names, so it matches `{{selection}}` for an ordinary word and differs only when the selection contains such characters.
+
+These are the same tokens the core Templates plugin uses, so a Templates file works here too. Frontmatter in the template (an empty `aliases:` list, say) carries over as-is. The folder and file name come from the plugin, not the template, since the file name is the term.
+
+To use [Templater](https://github.com/SilentVoid13/Templater) instead, leave *Term template* empty and add a Templater folder template for the glossary folder. The plugin creates a blank note and Templater fills it. Use one or the other for a folder, not both.
+
 ## Settings
 
 Settings are grouped into sections, each with a short description in the UI; the tables below carry the full details and tips.
@@ -81,6 +96,7 @@ Settings are grouped into sections, each with a short description in the UI; the
 | Setting | Default | Description |
 |---|---|---|
 | **Glossary folder** | `glossary` | folder with the term notes (created automatically when aliases are written if it is missing); has folder autocomplete, and shows a warning / indexed-term count below it |
+| **Term template** | — | note used as the body of new term notes; tokens like `{{title}}` / `{{selection}}` / `{{date}}` are filled in (see *Templates for new terms* above); empty = blank note |
 | **Link scope** | `Everywhere` | `Listed folders only` / `Everywhere except listed` / `Everywhere` |
 | **Folders to include/exclude** | — | folder list; meaning depends on the mode; shown only when the mode is not "Everywhere" |
 | **Always-excluded folders** | — | always out of scope, on top of any mode |

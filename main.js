@@ -11,6 +11,8 @@ var require_constants = __commonJS({
     "use strict";
     var DEFAULT_SETTINGS2 = {
       glossaryFolder: "glossary",
+      termTemplate: "",
+      // path to a template note; empty = create an empty note (as before)
       scopeMode: "vault",
       // 'folders' | 'except' | 'vault'
       scopeFolders: "",
@@ -849,8 +851,26 @@ var require_folder_suggest = __commonJS({
         this.close();
       }
     };
+    var FileSuggest = class extends AbstractInputSuggest {
+      constructor(app, inputEl) {
+        super(app, inputEl);
+        this.inputEl = inputEl;
+      }
+      getSuggestions(query) {
+        const q = query.toLowerCase();
+        return this.app.vault.getMarkdownFiles().filter((f) => f.path.toLowerCase().includes(q)).slice(0, 50);
+      }
+      renderSuggestion(file, el) {
+        el.setText(file.path);
+      }
+      selectSuggestion(file) {
+        this.setValue(file.path);
+        this.inputEl.trigger("input");
+        this.close();
+      }
+    };
     var folderSuggestAvailable = () => typeof AbstractInputSuggest === "function";
-    module2.exports = { FolderSuggest, folderSuggestAvailable };
+    module2.exports = { FolderSuggest, FileSuggest, folderSuggestAvailable };
   }
 });
 
@@ -860,7 +880,7 @@ var require_settings_tab = __commonJS({
     "use strict";
     var { PluginSettingTab, Setting, Notice: Notice2 } = require("obsidian");
     var { sanitizeFolder: sanitizeFolder2 } = require_constants();
-    var { FolderSuggest, folderSuggestAvailable } = require_folder_suggest();
+    var { FolderSuggest, FileSuggest, folderSuggestAvailable } = require_folder_suggest();
     var GlossaryLinkerSettingTab2 = class extends PluginSettingTab {
       constructor(app, plugin) {
         super(app, plugin);
@@ -887,6 +907,18 @@ var require_settings_tab = __commonJS({
         });
         this.folderStatusEl = containerEl.createEl("div", { cls: "glossary-section-desc" });
         this.renderFolderStatus();
+        const tplDesc = document.createDocumentFragment();
+        tplDesc.append("Path to a note used as the body for new terms (folder and file name stay controlled by the plugin). ");
+        tplDesc.append("Placeholders: {{title}}, {{selection}}, {{source}}, {{sourcePath}}, {{date}}, {{date:YYYY-MM-DD}}, {{time}}. ");
+        tplDesc.append("Leave empty for a blank note \u2014 Templater users can leave this empty and use a Templater folder template on the glossary folder instead. Use one or the other, not both.");
+        new Setting(containerEl).setName("Term template").setDesc(tplDesc).addText((t) => {
+          t.setValue(s.termTemplate).onChange(async (v) => {
+            s.termTemplate = v.trim();
+            await save(false);
+          });
+          if (folderSuggestAvailable())
+            new FileSuggest(this.app, t.inputEl);
+        });
         new Setting(containerEl).setName("Link scope").setDesc("Which notes terms are highlighted and linked in.").addDropdown((d) => d.addOption("folders", "Listed folders only").addOption("except", "Everywhere except listed").addOption("vault", "Everywhere").setValue(s.scopeMode).onChange(async (v) => {
           s.scopeMode = v;
           await save(false);
@@ -1709,7 +1741,7 @@ var require_modals = __commonJS({
 var require_actions = __commonJS({
   "src/actions.js"(exports2, module2) {
     "use strict";
-    var { Menu, Notice: Notice2 } = require("obsidian");
+    var { Menu, Notice: Notice2, TFile, moment } = require("obsidian");
     var { splitLines: splitLines2 } = require_constants();
     var { MaterializePreviewModal, HarvestPreviewModal, ChooseTermModal } = require_modals();
     module2.exports = {
@@ -1848,7 +1880,8 @@ var require_actions = __commonJS({
           new Notice2(`Glossary Linker: term "${name}" already exists`);
         } else {
           try {
-            file = await this.app.vault.create(path, "");
+            const content = await this.buildTermContent(name, sel);
+            file = await this.app.vault.create(path, content);
           } catch (e) {
             new Notice2("Glossary Linker: could not create term note");
             return;
@@ -1859,6 +1892,36 @@ var require_actions = __commonJS({
         this.rebuildIndex();
         this.updateStatusBar();
         await this.app.workspace.getLeaf("tab").openFile(file);
+      },
+      async buildTermContent(name, sel) {
+        const tplPath = (this.settings.termTemplate || "").trim();
+        if (!tplPath)
+          return "";
+        const tpl = this.app.vault.getAbstractFileByPath(tplPath);
+        if (!(tpl instanceof TFile)) {
+          new Notice2(`Glossary Linker: template not found: ${tplPath}`);
+          return "";
+        }
+        let text;
+        try {
+          text = await this.app.vault.read(tpl);
+        } catch (e) {
+          new Notice2("Glossary Linker: could not read template");
+          return "";
+        }
+        return this.applyTermPlaceholders(text, name, sel);
+      },
+      applyTermPlaceholders(text, name, sel) {
+        const src = this.app.workspace.getActiveFile();
+        const m = (() => {
+          try {
+            return moment ? moment() : null;
+          } catch (e) {
+            return null;
+          }
+        })();
+        const fmt = (f, fallback) => m ? m.format(f) : fallback();
+        return text.replace(/\{\{\s*title\s*\}\}/g, name).replace(/\{\{\s*selection\s*\}\}/g, sel).replace(/\{\{\s*source\s*\}\}/g, src ? src.basename : "").replace(/\{\{\s*sourcePath\s*\}\}/g, src ? src.path : "").replace(/\{\{\s*date(?::([^}]*))?\s*\}\}/g, (_, f) => fmt((f || "YYYY-MM-DD").trim(), () => (/* @__PURE__ */ new Date()).toISOString().slice(0, 10))).replace(/\{\{\s*time(?::([^}]*))?\s*\}\}/g, (_, f) => fmt((f || "HH:mm").trim(), () => (/* @__PURE__ */ new Date()).toTimeString().slice(0, 5)));
       },
       chooseTerm(candidates, title, action) {
         const list = (candidates || []).filter(Boolean);
