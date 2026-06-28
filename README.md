@@ -1,64 +1,158 @@
+<p align="center">
+  <img src="docs/images/banner.svg" alt="Glossary Linker — highlight, link, and learn glossary terms in any word form" width="760">
+</p>
+
 # Glossary Linker
 
-Highlights glossary terms in your notes in any word form (declensions, plurals), lets you turn them into real links, and learns new aliases from links you already made by hand. It's a take on the discontinued Virtual Linker, with morphology-aware matching so inflected forms are found, not only exact spellings.
+Highlights glossary terms in your notes in any word form (declensions, plurals), lets you turn them into real links, and picks up new aliases from links you've already made by hand. It grew out of the discontinued Virtual Linker, but it matches inflected forms instead of exact spellings only.
 
-Ships as `main.js` + `manifest.json` + `styles.css`. Six language modules are bundled into `main.js`, so it works as soon as it's installed; more languages can be contributed as modules (see *Adding a language*). `main.js` is built from `src/` with esbuild (see *Development*).
+<p align="center">
+  <img src="docs/images/hero.png" alt="One note with glossary terms highlighted in several word forms and in two languages" width="700">
+</p>
+
+The plugin ships as `main.js`, `manifest.json` and `styles.css`. Six language modules are baked into `main.js`, so it works the moment you install it. You can add more languages as modules (see [Adding a language](#adding-a-language)). `main.js` is built from `src/` with esbuild (see [Development](#development)).
+
+## Contents
+
+- [What it does](#what-it-does)
+  - [Highlight terms in any word form](#highlight-terms-in-any-word-form)
+  - [Turn terms into real links](#turn-terms-into-real-links)
+  - [Collect aliases from links you made](#collect-aliases-from-links-you-made)
+  - [Suggest links as you type](#suggest-links-as-you-type-optional)
+  - [Ambiguous terms](#ambiguous-terms)
+- [Morphology and languages](#morphology-and-languages)
+  - [Which scripts fit](#which-scripts-fit)
+  - [Adding a language](#adding-a-language)
+  - [Alias form when collecting](#alias-form-when-collecting-aliasharvestmode)
+- [Commands](#commands-command-palette-ctrlp)
+  - [Templates for new terms](#templates-for-new-terms)
+- [Settings](#settings)
+- [Skipped contexts](#skipped-contexts)
+- [Performance](#performance)
+- [Public API](#public-api)
+- [Licenses & credits](#licenses--credits)
+- [Development](#development)
+- [Installation](#installation)
+- [Compatibility](#compatibility)
 
 ## What it does
 
 ### Highlight terms in any word form
-The term list is built from each glossary file's name plus its `aliases`. Matching words are found even when inflected (`unit → units`, RU `юнит → юнита/юниту/юнитов`). It's multilingual: the engine is picked automatically by the word's script — Russian for Cyrillic, English for Latin (see below). Highlighting works in Reading view and in the editor (Live / On save). Multi-word terms (`Vision radius`, hyphenated `Flow-field`) are matched whole, longest match first.
+
+The term list comes from each glossary file's name and its `aliases`. Matching words are found even when inflected (`unit → units`, RU `юнит → юнита/юниту/юнитов`). The engine is multilingual and picks itself by the word's script: Russian for Cyrillic, English for Latin (more in [Morphology and languages](#morphology-and-languages)). Highlighting runs in Reading view and in the editor (Live or On save). Multi-word terms (`Vision radius`, hyphenated `Flow-field`) match as a whole, longest match first.
 
 In Reading view the highlights are real internal links, so they behave like ordinary `[[links]]`:
-- hover shows the term's page preview (per your *Page Preview* settings, with or without Ctrl, same as any link);
+
+- hover shows the term's page preview (following your *Page Preview* settings, with or without Ctrl, the same as any link);
 - click opens the glossary note (Ctrl/Cmd+click for a new tab);
-- right-click opens a menu: *Turn into link*, *Turn all "…" into links: this note*, *Turn all "…" into links: all notes*, *Add "…" to excluded words*, *Add "…" to excluded terms*, *Open glossary note*, *Open in new tab*. Each group can be hidden under *Settings → Context menu* (with all off, right-click just shows the native menu).
+- right-click opens a menu: *Turn into link*, *Turn all "…" into links: this note*, *Turn all "…" into links: all notes*, *Add "…" to excluded words*, *Add "…" to excluded terms*, *Open glossary note*, *Open in new tab*. You can hide each group under *Settings → Context menu*; turn them all off and right-click just shows the native menu.
+
+<p align="center">
+  <img src="docs/images/context-menu.png" alt="The right-click menu on a highlighted term" width="240">
+</p>
+
+Hover previews go through Obsidian's Page Preview. The plugin registers as its own source, so glossary links show up as a *Glossary Linker* toggle under *Settings → Core plugins → Page Preview* — you can turn their previews on or off, and require a modifier key or not, independently of ordinary links.
 
 ### Turn terms into real links
-Commands for the current note / selection / all notes. A matching word is replaced with `[[Title|word]]`: the visible text stays exactly as in your note, the link points to the glossary title. There's an "only first match per note" option. Changes are previewed before writing.
+
+There are commands for the current note, the selection, or every note. A matching word becomes `[[Title|word]]`: the visible text stays exactly as you wrote it, and the link points to the glossary title. An "only first match per note" option is available, and every change is previewed before it's written.
+
+<p align="center">
+  <img src="docs/images/turn-into-links.png" alt="The preview dialog listing each replacement before it is written" width="540">
+  <br><sub>Every change is previewed before it's written.</sub>
+</p>
+
+Same words before and after — the visible text is unchanged, only the link is added:
+
+<div align="center">
+<table>
+<tr>
+<td><img src="docs/images/turn-into-links-before.png" alt="Terms highlighted but the text is still plain" width="380"></td>
+<td><img src="docs/images/turn-into-links-after.png" alt="The same terms turned into real links" width="380"></td>
+</tr>
+<tr>
+<td align="center"><sub>Before — highlighted, text still plain</sub></td>
+<td align="center"><sub>After — real links</sub></td>
+</tr>
+</table>
+</div>
+
+<details>
+<summary>Vault-wide preview (all notes)</summary>
+
+<p align="center">
+  <img src="docs/images/turn-into-links-all.png" alt="The all-notes preview: ambiguous words resolved at the top, then replacements grouped by file" width="420">
+</p>
+
+Across the whole vault, replacements are grouped by file, with a single picker at the top for any word that matches more than one term.
+
+</details>
 
 ### Collect aliases from links you made
-Scans for `[[Term|some wording]]` links you wrote by hand. If `Term` is a glossary note and the wording is custom, that wording becomes a new alias for the term. By default it's reduced to a base form first (`[[fruit|fruits]] → fruit`). Aliases are de-duplicated case-insensitively, and nothing is added if the word already matches anyway. Run it as a command or automatically on save. Previewed before writing — each alias has a checkbox, aliases that would collide with another term are flagged with ⚠, and candidates skipped because they already exist are listed separately.
+
+This scans for `[[Term|some wording]]` links you wrote by hand. If `Term` is a glossary note and the wording is custom, that wording becomes a new alias for the term. By default the wording is reduced to a base form first (`[[fruit|fruits]] → fruit`). Aliases are de-duplicated case-insensitively, and nothing is added if the word already matches anyway. Run it as a command or automatically on save. The preview gives each alias a checkbox, flags aliases that would collide with another term with ⚠, and lists candidates skipped for already existing separately.
+
+<p align="center">
+  <img src="docs/images/collect-aliases-2.png" alt="The collect-aliases preview: new aliases with checkboxes, a collision flagged with a warning, and skipped candidates listed below" width="540">
+</p>
 
 ### Suggest links as you type (optional)
-With *Autocomplete → Suggest links while typing* on, typing in an in-scope note offers to insert a `[[link]]` to a matching glossary term — either a prefix of a term's title/alias (type `Vis` → *Vision radius*) or an inflected form of it. Picking a prefix match inserts `[[Term]]`; picking an inflected form keeps your wording as `[[Term|word]]`. Off by default; it never triggers inside the glossary folder, code, links or other protected spans.
+
+Turn on *Autocomplete → Suggest links while typing* and typing in an in-scope note offers to insert a `[[link]]` to a matching glossary term. The match can be a prefix of a term's title or alias (type `Vis` → *Vision radius*) or an inflected form of one. A prefix match inserts `[[Term]]`; an inflected form keeps your wording as `[[Term|word]]`. It's off by default and never fires inside the glossary folder, code, links or other protected spans.
+
+<p align="center">
+  <img src="docs/images/quick-capture.png" alt="The link-suggestion popup while typing, listing matching terms" width="560">
+</p>
 
 ### Ambiguous terms
-When a word matches more than one glossary term (the same alias on two notes), it gets a distinct (wavy) underline; hovering shows a tooltip listing all the matching terms rather than a single (misleading) page preview. Acting on it — clicking to open, or *Turn into link* / *Open* from the right-click menu — pops a small picker so you choose which term, instead of silently following the first. A word that matches a single term acts immediately as usual.
+
+When a word matches more than one glossary term (the same alias lives on two notes), it gets a distinct wavy underline, and hovering shows a tooltip listing every matching term instead of a single, misleading page preview. Acting on it — clicking to open, or *Turn into link* / *Open* from the right-click menu — opens a small picker so you choose which term rather than silently following the first. A word that matches a single term acts immediately, as usual.
+
+<p align="center">
+  <img src="docs/images/ambiguous-1.png" alt="A word with a wavy underline and a tooltip listing both matching terms" width="620">
+  <br><sub>A word that fits two terms gets a wavy underline and a tooltip listing them.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/images/ambiguous-2.png" alt="The picker shown when acting on an ambiguous word" width="420">
+  <br><sub>Acting on it asks which term you meant.</sub>
+</p>
 
 ## Morphology and languages
 
-Morphology is modular. Six language modules are bundled in by default; more can be added and rebuilt (see *Adding a language*). Each is validated against the module contract on load and gets a toggle in settings (*Matching → Languages*). For each word, the keys from every enabled language that claims it are combined, so same-script languages like English/Spanish/German/French all contribute on a Latin word. If no language claims a word, it's matched exactly (lowercased), without morphology.
+Morphology is modular. Six language modules are bundled in by default, and you can add more and rebuild (see [Adding a language](#adding-a-language)). Each one is validated against the module contract on load and gets a toggle in settings (*Matching → Languages*). For a given word, the keys from every enabled language that claims it are combined, so same-script languages like English, Spanish, German and French all contribute on a Latin word. If no language claims a word, it's matched exactly (lowercased), with no morphology.
 
-The built-in modules are stemmer code bundled into the plugin:
-- `ru.js` (Russian) — Porter stemmer (Snowball, public domain). Keys are the union of the Porter stem and an ending strip, dropping an over-short stem. This covers both hard cases: `юнит/юнитов` (the stemmer over-truncates to `юн`, the ending strip rescues `юнит`) and `рой/роем`, while `юный/юнга/юности` don't stick to `Юнит`.
+The built-in modules are stemmer code compiled into the plugin:
+
+- `ru.js` (Russian) — Porter stemmer (Snowball, public domain). The keys are the union of the Porter stem and an ending strip, dropping an over-short stem. That covers both awkward cases: `юнит/юнитов` (the stemmer over-truncates to `юн`, the ending strip rescues `юнит`) and `рой/роем`, while `юный/юнга/юности` don't stick to `Юнит`.
 - `uk.js` (Ukrainian) — the plugin's own light stemmer, handling the о/і and е/і vowel alternation in closed syllables (`кіт/кота`, `ніч/ночі`).
-- `en.js` (English) — Porter stemmer (Porter 1980, public domain): `units → unit`, `running → run`. This is why no separate "plural s" option is needed.
-- `es.js` / `de.js` / `fr.js` (Spanish / German / French) — ports of the UniNE / Apache Lucene light stemmers (Apache License 2.0, J. Savoy): `unidades → unidad`, `Einheiten → einheit`, `chevaux → cheval`. Lighter than full Snowball but enough to link a term across its word forms.
+- `en.js` (English) — Porter stemmer (Porter 1980, public domain): `units → unit`, `running → run`. That's why there's no separate "plural s" option.
+- `es.js` / `de.js` / `fr.js` (Spanish / German / French) — ports of the UniNE / Apache Lucene light stemmers (Apache License 2.0, J. Savoy): `unidades → unidad`, `Einheiten → einheit`, `chevaux → cheval`. Lighter than full Snowball, but enough to link a term across its word forms.
 
-> Enable only the languages your vault actually uses. Because same-script languages combine, leaving German on in an English-only vault can occasionally over-stem a word. On first run the plugin enables only English plus your Obsidian interface language (if a module exists for it); turn on any others you need.
+> Enable only the languages your vault actually uses. Since same-script languages combine, leaving German on in an English-only vault can occasionally over-stem a word. On first run the plugin enables English plus your Obsidian interface language (if a module exists for it); switch on any others you need.
 
-The mode (`matchMode`) is a global switch for all languages: `stemmer` / `endingStrip` (light ending trim) / `exact`. The actual algorithm per mode comes from the language module.
+The mode (`matchMode`) is a global switch for all languages: `stemmer`, `endingStrip` (a light ending trim), or `exact`. Each mode's actual algorithm comes from the language module.
 
 ### Which scripts fit
 
-The matcher splits text into words (Unicode `\p{L}`/`\p{Nd}`) and reduces each by trimming endings, so it fits alphabetic scripts with word separators and suffix inflection: Latin, Cyrillic, Greek (full fit), and also Indic abugidas and Korean, where a module strips suffixes or particles. It does not fit spaceless CJK or root-and-pattern scripts like Arabic/Hebrew — those need word segmentation or substring search, which the core doesn't do.
+The matcher splits text into words (Unicode `\p{L}`/`\p{Nd}`) and reduces each one by trimming endings, so it fits alphabetic scripts with word separators and suffix inflection: Latin, Cyrillic and Greek fit fully, and Indic abugidas and Korean fit where a module strips suffixes or particles. It does not fit spaceless CJK or root-and-pattern scripts like Arabic and Hebrew, which need word segmentation or substring search that the core doesn't do.
 
-Matching is case-insensitive; the visible text keeps the casing from your note, and collected aliases are stored lowercased.
+Matching is case-insensitive. The visible text keeps the casing from your note, and collected aliases are stored lowercased.
 
 ### Adding a language
 
-A language is a small JavaScript module, bundled into `main.js` at build time — nothing is loaded or executed at runtime. Adding one means contributing a module and rebuilding, via a pull request. The full contract, an annotated template, and a step-by-step guide live in [`languages/README.md`](languages/README.md); the short version:
+A language is a small JavaScript module bundled into `main.js` at build time; nothing is loaded or executed at runtime. Adding one means contributing a module and rebuilding, through a pull request. The full contract, an annotated template and a step-by-step guide live in [`languages/README.md`](languages/README.md). The short version:
 
 1. Copy [`languages/_template.js`](languages/_template.js) to `languages/<id>.js` (e.g. `uk.js`). A module exports `id`, `name`, `match(word)` and `keys(word, mode)`, plus optional `priority` and `lemma(word)`. Reusing a built-in `id` (`ru`/`uk`/`en`/`es`/`de`/`fr`) overrides it.
 2. Implement `match` (claims a word, usually by script) and `keys` (returns the comparison keys for a word in the current mode — `stemmer` / `endingStrip` / `exact`). Two words link when their key sets overlap.
 3. Register the module in [`src/builtin-languages.js`](src/builtin-languages.js) and run `npm run build`.
-4. Restart the plugin — the language appears under *Matching → Languages*. Turn its toggle on.
+4. Restart the plugin. The language shows up under *Matching → Languages*; turn its toggle on.
 
-Each module is validated against the contract on load (`src/language-api.js`). A module that does not export an object with a valid `id` / `name` / `match` / `keys` is dropped and listed under *Languages* with a ⚠ marker and the reason, instead of breaking the index — so a mistake is easy to spot.
+Every module is validated against the contract on load (`src/language-api.js`). A module that doesn't export an object with a valid `id` / `name` / `match` / `keys` is dropped and listed under *Languages* with a ⚠ marker and the reason, so the index keeps working and a mistake is easy to spot.
 
 ### Alias form when collecting (`aliasHarvestMode`)
-- **`lemma`** (default) — reduce the wording to a base (dictionary) form: EN `boxes → box`, RU `роем → рой`, `юнитов → юнит`. RU soft-stem nouns (`боем → бой`) have a dedicated rule; irregular alternations may need a manual fix in the preview.
+
+- **`lemma`** (default) — reduce the wording to a base (dictionary) form: EN `boxes → box`, RU `роем → рой`, `юнитов → юнит`. RU soft-stem nouns (`боем → бой`) have a dedicated rule; irregular alternations may still need a manual fix in the preview.
 - **`literal`** — store the wording as written.
 - **`both`** — store both.
 
@@ -66,23 +160,23 @@ Each module is validated against the contract on load (`src/language-api.js`). A
 
 - **Turn terms into links: this note / selection / all notes**
 - **Collect aliases from links: this note / all notes**
-- **Create glossary term from selection** — creates a note in the glossary folder named after the selected text and links the selection to it
+- **Create glossary term from selection** — creates a note in the glossary folder named after the selected text, and links the selection to it
 - **Rebuild glossary index**
 
-You can also act on a highlighted term from its right-click menu: *Turn into link*, *Turn all "…" into links: this note*, *Turn all "…" into links: all notes* (the last previews changes across the whole vault), plus *Add "…" to excluded words* / *Add "…" to excluded terms* to quickly suppress a false match. Right-clicking on a plain text **selection** offers *Glossary: create term & link* (create the term note and replace the selection with a link), *Glossary: create term* (just create and open it), and *Glossary: add "…" to excluded words* (suppress that word, term or not). Right-clicking anywhere else in the editor (empty space or a link) offers *Glossary: collect aliases from links (this note)*. Each of these groups can be toggled off under *Settings → Context menu*.
+You can also act on a highlighted term from its right-click menu: *Turn into link*, *Turn all "…" into links: this note*, *Turn all "…" into links: all notes* (the last previews changes across the whole vault), plus *Add "…" to excluded words* / *Add "…" to excluded terms* to quickly suppress a false match. Right-click a plain-text **selection** for *Glossary: create term & link* (create the term note and replace the selection with a link), *Glossary: create term* (just create and open it), and *Glossary: add "…" to excluded words* (suppress that word, term or not). Right-click anywhere else in the editor — empty space or a link — for *Glossary: collect aliases from links (this note)*. Each of these groups can be toggled off under *Settings → Context menu*.
 
-A status-bar counter (e.g. `3 terms`) shows how many glossary terms are on the current note — plain-text mentions plus, optionally, terms already linked directly; click it to turn this note's terms into links (toggles under *Highlighting → Status bar count*).
+A status-bar counter (e.g. `3 terms`) shows how many glossary terms are on the current note: plain-text mentions plus, optionally, terms already linked directly. Click it to turn this note's terms into links (toggles under *Highlighting → Status bar count*).
 
 ### Templates for new terms
 
-A new term is a blank note by default. Set *Term template* to a note path to use that note as the body instead. These tokens are replaced when the term is created:
+A new term is a blank note by default. Set *Term template* to a note path to use that note as the body instead. These tokens are filled in when the term is created:
 
 - `{{title}}` — the term name
 - `{{selection}}` — the text you selected
 - `{{source}}` / `{{sourcePath}}` — the note the term was created from
 - `{{date}}`, `{{time}}` — current date/time; pass a [moment](https://momentjs.com/docs/#/displaying/format/) format as `{{date:YYYY-MM-DD}}`
 
-`{{title}}` is the selection stripped of characters that aren't allowed in file names, so it matches `{{selection}}` for an ordinary word and differs only when the selection contains such characters.
+`{{title}}` is the selection with characters that aren't allowed in file names stripped out, so it matches `{{selection}}` for an ordinary word and differs only when the selection contains such characters.
 
 These are the same tokens the core Templates plugin uses, so a Templates file works here too. Frontmatter in the template (an empty `aliases:` list, say) carries over as-is. The folder and file name come from the plugin, not the template, since the file name is the term.
 
@@ -90,13 +184,13 @@ To use [Templater](https://github.com/SilentVoid13/Templater) instead, leave *Te
 
 ## Settings
 
-Settings are grouped into sections, each with a short description in the UI; the tables below carry the full details and tips.
+Settings are grouped into sections, each with a short description in the UI. The tables below carry the full details and tips.
 
 **Scope**
 | Setting | Default | Description |
 |---|---|---|
 | **Glossary folder** | `glossary` | folder with the term notes (created automatically when aliases are written if it is missing); has folder autocomplete, and shows a warning / indexed-term count below it |
-| **Term template** | — | note used as the body of new term notes; tokens like `{{title}}` / `{{selection}}` / `{{date}}` are filled in (see *Templates for new terms* above); empty = blank note |
+| **Term template** | — | note used as the body of new term notes; tokens like `{{title}}` / `{{selection}}` / `{{date}}` are filled in (see [Templates for new terms](#templates-for-new-terms) above); empty = blank note |
 | **Link scope** | `Everywhere` | `Listed folders only` / `Everywhere except listed` / `Everywhere` |
 | **Folders to include/exclude** | — | folder list; meaning depends on the mode; shown only when the mode is not "Everywhere" |
 | **Always-excluded folders** | — | always out of scope, on top of any mode |
@@ -119,7 +213,11 @@ Settings are grouped into sections, each with a short description in the UI; the
 | **Status bar count** | on | show the count of terms on the current note (e.g. `3 terms`) in the status bar; the base count is plain-text (not-yet-linked) mentions; click it to link them |
 | **Count direct links** | on | also count terms already linked directly (`[[Term]]` / `[[Term\|alias]]`), not just plain-text mentions |
 
-The highlight's color and underline (and the ambiguous-term underline) are exposed to the [Style Settings](https://github.com/mgmeyers/obsidian-style-settings) plugin under a *Glossary Linker* section, so you can restyle them from a UI. Without Style Settings — or left at default — the highlight follows your theme's link color.
+The highlight's color, underline style and offset — plus a separate underline for ambiguous terms — are exposed to the [Style Settings](https://github.com/mgmeyers/obsidian-style-settings) plugin under a *Glossary Linker* section, so you can restyle them from a UI. Without Style Settings, or left at default, the highlight follows your theme's link color with a dotted underline.
+
+<p align="center">
+  <img src="docs/images/style-settings.png" alt="The Glossary Linker section in the Style Settings plugin" width="680">
+</p>
 
 **Autocomplete**
 | Setting | Default | Description |
@@ -147,13 +245,13 @@ The highlight's color and underline (and the ambiguous-term underline) are expos
 
 ## Skipped contexts
 
-Code blocks (``` and `~~~`), inline code, frontmatter, existing `[[...]]` and `[..](..)` links, and URLs are left untouched. A term is never linked inside its own note. In Reading view, links and (optionally) headings are additionally skipped by DOM ancestry; in the editor, by the CM6 syntax tree. When a link is written into a Markdown table cell, the alias pipe is escaped (`[[Term\|word]]`) so the table is not broken.
+Code blocks (``` and `~~~`), inline code, frontmatter, existing `[[...]]` and `[..](..)` links, and URLs are left untouched. A term is never linked inside its own note. In Reading view, links and (optionally) headings are skipped by DOM ancestry; in the editor, by the CM6 syntax tree. When a link is written into a Markdown table cell, the alias pipe is escaped (`[[Term\|word]]`) so the table isn't broken.
 
 In the editor the highlights behave like real internal links: a plain click places the cursor, Ctrl/Cmd+click follows the term, middle-click opens it in a new tab, and the hover preview honours your Page Preview modifier setting.
 
 ## Performance
 
-The index is built on load and rebuilt when glossary notes change (debounced). Word-form keys are cached in the index, and per-word stemmer results are memoised across a render pass (invalidated on rebuild); scanning is token-based with longest-match-first. The editor's right-click menu reads the term straight from the clicked decoration instead of re-scanning the document.
+The index is built on load and rebuilt when glossary notes change (debounced). Word-form keys are cached in the index, and per-word stemmer results are memoised across a render pass (invalidated on rebuild). Scanning is token-based with longest-match-first. The editor's right-click menu reads the term straight from the clicked decoration instead of re-scanning the document.
 
 ## Public API
 
@@ -180,7 +278,7 @@ dv.list(report.filter((r) => r.count === 0).map((r) => r.canonical));
 
 ## Licenses & credits
 
-Most bundled language modules port well-known, permissively-licensed stemming algorithms (`uk.js` is the plugin's own, under its MIT license). All are free for commercial and non-commercial use; the only obligation is keeping the attribution notices (already in each file's header).
+Most bundled language modules port well-known, permissively-licensed stemming algorithms (`uk.js` is the plugin's own, under its MIT license). All are free for commercial and non-commercial use; the only obligation is keeping the attribution notices, which are already in each file's header.
 
 | Module | Algorithm | License | Reference |
 |---|---|---|---|
@@ -193,9 +291,11 @@ Most bundled language modules port well-known, permissively-licensed stemming al
 
 The es/de/fr stemmers were translated to JavaScript and adapted to this plugin's module interface; per the Apache License the source files note that they are modified ports. Apache 2.0 full text: <https://www.apache.org/licenses/LICENSE-2.0>.
 
+Glossary Linker itself is released under the MIT license — see [`LICENSE`](LICENSE).
+
 ## Development
 
-The core is written as small CommonJS modules in `src/` and bundled into `main.js` by esbuild. The language modules in `languages/` are bundled in via `src/builtin-languages.js`; adding a language means contributing a module there and rebuilding (see [`languages/README.md`](languages/README.md)). Nothing is loaded or executed at runtime.
+The core is written as small CommonJS modules in `src/` and bundled into `main.js` by esbuild. The language modules in `languages/` are bundled in through `src/builtin-languages.js`; adding a language means contributing a module there and rebuilding (see [`languages/README.md`](languages/README.md)). Nothing is loaded or executed at runtime.
 
 ```
 npm install      # once, installs esbuild
@@ -203,15 +303,17 @@ npm run build    # bundle src/ -> main.js
 ```
 
 `src/` layout:
+
 - `main.js` — the `Plugin` class: lifecycle, commands, language loading, scope, small shared helpers; applies the mixins below.
 - `constants.js` — default settings.
 - `builtin-languages.js` — requires the modules in `languages/` so they are bundled into `main.js`.
 - `language-api.js` — the language-module contract and `validateLanguage()`.
 - `matcher.js` — the term index and matching engine (`keysFor`, `tokenizeForm`, `rebuildIndex`, `findMatches`, `termsMatchingText`, protected ranges).
 - `highlight.js` — Reading-view DOM highlighting and the CM6 editor extension.
-- `actions.js` — turning terms into links + collecting aliases.
+- `actions.js` — turning terms into links and collecting aliases.
 - `api.js` — the public API mixin (`app.plugins.plugins['glossary-linker'].api`).
-- `modals.js` — the preview dialogs and the confirm dialog. `settings-tab.js` — the settings UI.
+- `modals.js` — the preview dialogs and the confirm dialog.
+- `settings-tab.js` — the settings UI.
 - `folder-suggest.js` — folder autocomplete for the glossary-folder field (feature-detected).
 - `term-suggest.js` — the editor autocomplete (`EditorSuggest`, feature-detected).
 
@@ -223,4 +325,15 @@ npm run build    # bundle src/ -> main.js
 
 **Via [BRAT](https://github.com/TfTHacker/obsidian42-brat):** add the repository `max-fluff/obsidian-glossary-linker`.
 
-Once accepted into the community catalog it will also be installable from *Settings → Community plugins → Browse*.
+Once it's accepted into the community catalog it will also be installable from *Settings → Community plugins → Browse*.
+
+## Compatibility
+
+Requires Obsidian 1.4.0 or newer, and works on both desktop and mobile.
+
+Nothing below is required — the plugin runs on its own — but it cooperates with a few others if you have them:
+
+- **[Style Settings](https://github.com/mgmeyers/obsidian-style-settings)** — a UI for the highlight color, underline style and offset, and the ambiguous-term underline.
+- **Page Preview** (core plugin) — provides the hover preview on glossary links; the plugin registers as its own *Glossary Linker* source you can toggle independently.
+- **[Dataview](https://github.com/blacksmithgu/obsidian-dataview)** — query the glossary from DataviewJS through the [public API](#public-api) (usage reports, orphan terms, and so on).
+- **Templates** (core) / **[Templater](https://github.com/SilentVoid13/Templater)** — fill the body of newly created term notes (see [Templates for new terms](#templates-for-new-terms)).
