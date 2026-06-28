@@ -1,12 +1,12 @@
 'use strict';
 
 const { Menu, Notice } = require('obsidian');
+const { splitLines } = require('./constants');
 const { MaterializePreviewModal, HarvestPreviewModal, ChooseTermModal } = require('./modals');
 
 // Turning terms into links + collecting aliases. Mixed into the plugin prototype.
 module.exports = {
-  // The matches to link in a note: findMatches, then (optionally) first-per-term.
-  // Ambiguous matches keep their `alts`, so the preview can let the user pick a term.
+  // Ambiguous matches keep their `alts` so the preview can let the user pick a term.
   collectMatches(text, currentCanonical) {
     const matches = this.findMatches(text, currentCanonical, { protect: true });
     if (!this.settings.linkFirstOnly) return matches;
@@ -69,8 +69,6 @@ module.exports = {
     });
   },
 
-  // Scan in-scope notes with compute(text, file) -> matches[], keeping only files
-  // with matches, with a progress notice.
   async scanScopeMatches(compute) {
     const files = this.getScopeFiles();
     const out = [];
@@ -100,9 +98,7 @@ module.exports = {
     const sel = (editor.getSelection() || '').trim();
     if (!sel) { new Notice('Glossary Linker: nothing selected'); return; }
 
-    // If the selection already matches an existing term, don't make a duplicate —
-    // just open the existing one (collision on creation is a rare corner case, and
-    // the context almost always means the term you want already exists).
+    // If the selection already matches a term, open that one instead of making a duplicate.
     if (this.settings.aliasCollisionWarnings) {
       const hits = this.termsMatchingText(sel);
       if (hits.length) {
@@ -136,8 +132,6 @@ module.exports = {
     await this.app.workspace.getLeaf('tab').openFile(file);
   },
 
-  // Run `action(term)`. With one candidate it runs straight away; with several
-  // (an alias collision) it first asks which term via a modal.
   chooseTerm(candidates, title, action) {
     const list = (candidates || []).filter(Boolean);
     if (list.length <= 1) return action(list[0]);
@@ -167,9 +161,8 @@ module.exports = {
       groups.push((menu) => {
         menu.addItem((i) => i.setTitle(`Add "${display}" to excluded words`).setIcon('ban')
           .onClick(() => this.addToExclusion('excludeWords', display.toLowerCase())));
-        // Use the clicked word, not the resolved term: excluded terms matches titles
-        // AND aliases, so excluding "container" drops every term that shares it —
-        // no need to pick one of the colliding terms.
+        // Exclude by the clicked word, not the resolved term: it matches both titles and
+        // aliases, so it drops every term sharing the word without needing to pick one.
         menu.addItem((i) => i.setTitle(`Add "${display}" to excluded terms`).setIcon('trash-2')
           .onClick(() => this.addToExclusion('excludeTerms', display)));
       });
@@ -191,9 +184,8 @@ module.exports = {
     return true;
   },
 
-  // Append a value to a newline list setting (excludeWords / excludeTerms) and apply it.
   async addToExclusion(listKey, value) {
-    const lines = (this.settings[listKey] || '').split('\n').map((s) => s.trim()).filter(Boolean);
+    const lines = splitLines(this.settings[listKey]);
     if (lines.some((l) => l.toLowerCase() === value.toLowerCase())) {
       new Notice(`Glossary Linker: "${value}" is already excluded`);
       return;

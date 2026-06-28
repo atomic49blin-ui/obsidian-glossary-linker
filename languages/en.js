@@ -16,7 +16,6 @@ const MEQ1 = new RegExp('^(' + CC + ')?' + VV + CC + '(' + VV + ')?$');
 const MGR1 = new RegExp('^(' + CC + ')?' + VV + CC + VV + CC);
 const S_V = new RegExp('^(' + CC + ')?' + V);
 
-// Aggressive root (stemmer mode).
 function stem(word) {
   let w = word.toLowerCase();
   if (w.length < 3) return w;
@@ -60,7 +59,6 @@ function stem(word) {
   return w;
 }
 
-// Light plural strip (endingStrip mode).
 function strip(word) {
   const w = word.toLowerCase();
   if (w.length > 4 && w.endsWith('ies')) return w.slice(0, -3) + 'y';
@@ -69,12 +67,10 @@ function strip(word) {
   return w;
 }
 
-// Comparison keys for stemmer mode.
 function stemKeys(word) {
   return [stem(word)];
 }
 
-// Base (dictionary) form for collected aliases.
 function lemma(word) {
   return stem(word.toLowerCase());
 }

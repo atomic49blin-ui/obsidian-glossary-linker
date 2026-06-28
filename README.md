@@ -28,11 +28,11 @@ When a word matches more than one glossary term (the same alias on two notes), i
 
 ## Morphology and languages
 
-Morphology is modular. Five language modules are bundled in by default; more can be added as modules and rebuilt (see *Adding a language*). Each is validated against the module contract on load and gets a toggle in settings (*Matching → Languages*). For each word, the keys from every enabled language that claims it are combined, so same-script languages like English/Spanish/German/French all contribute on a Latin word. If no language claims a word, it's matched exactly (lowercased), without morphology.
+Morphology is modular. Six language modules are bundled in by default; more can be added and rebuilt (see *Adding a language*). Each is validated against the module contract on load and gets a toggle in settings (*Matching → Languages*). For each word, the keys from every enabled language that claims it are combined, so same-script languages like English/Spanish/German/French all contribute on a Latin word. If no language claims a word, it's matched exactly (lowercased), without morphology.
 
 The built-in modules are stemmer code bundled into the plugin:
 - `ru.js` (Russian) — Porter stemmer (Snowball, public domain). Keys are the union of the Porter stem and an ending strip, dropping an over-short stem. This covers both hard cases: `юнит/юнитов` (the stemmer over-truncates to `юн`, the ending strip rescues `юнит`) and `рой/роем`, while `юный/юнга/юности` don't stick to `Юнит`.
-- `uk.js` (Ukrainian) — the plugin's own light stemmer, with the о/і and е/і vowel alternation in closed syllables (`кіт/кота`, `ніч/ночі`). A small worked example of the module contract.
+- `uk.js` (Ukrainian) — the plugin's own light stemmer, handling the о/і and е/і vowel alternation in closed syllables (`кіт/кота`, `ніч/ночі`).
 - `en.js` (English) — Porter stemmer (Porter 1980, public domain): `units → unit`, `running → run`. This is why no separate "plural s" option is needed.
 - `es.js` / `de.js` / `fr.js` (Spanish / German / French) — ports of the UniNE / Apache Lucene light stemmers (Apache License 2.0, J. Savoy): `unidades → unidad`, `Einheiten → einheit`, `chevaux → cheval`. Lighter than full Snowball but enough to link a term across its word forms.
 
@@ -40,17 +40,11 @@ The built-in modules are stemmer code bundled into the plugin:
 
 The mode (`matchMode`) is a global switch for all languages: `stemmer` / `endingStrip` (light ending trim) / `exact`. The actual algorithm per mode comes from the language module.
 
-### Script support — which languages fit this model
+### Which scripts fit
 
-The matcher works on whitespace/punctuation-separated words and reduces each word by trimming endings. So a language module is a good fit when the script is alphabetic with word separators and inflectional endings:
-- Latin / Cyrillic / Greek — full fit (the bundled modules).
-- Hindi (Devanagari) and similar Indic abugidas — good fit: words are space-separated and take suffixes, so a suffix-stripping module works just like `es`/`de`/`fr`.
-- Korean (Hangul) — workable: words are space-separated, but grammatical particles attach to nouns (책 → 책을/책이); a module can strip those particles in `keys`.
-- Chinese / Japanese — not a good fit out of the box: there are no spaces between words and no inflectional endings, so a whole run of characters becomes one token and stemming is meaningless. Matching these needs word segmentation / substring search, a different strategy than this plugin uses. An exact-match module (`keys` returns the word as-is) would still link whole-token terms, but not terms embedded inside longer compounds.
+The matcher splits text into words (Unicode `\p{L}`/`\p{Nd}`) and reduces each by trimming endings, so it fits alphabetic scripts with word separators and suffix inflection: Latin, Cyrillic, Greek (full fit), and also Indic abugidas and Korean, where a module strips suffixes or particles. It does not fit spaceless CJK or root-and-pattern scripts like Arabic/Hebrew — those need word segmentation or substring search, which the core doesn't do.
 
-So "any language" splits into two cases. Alphabetic scripts with word separators and suffix inflection (Latin, Cyrillic, Greek, Indic, Korean, …) are a natural fit: add a module, no core changes. The hard cases (spaceless CJK, root-and-pattern morphology like Arabic/Hebrew) would need a different matcher — a per-language `segment(text)` hook and substring/dictionary lookup in the core — which is out of scope here.
-
-Word boundaries use Unicode classes (`\p{L}` with the `u` flag); matching is case-insensitive, the visible text keeps the casing from your note, and collected aliases are stored lowercased.
+Matching is case-insensitive; the visible text keeps the casing from your note, and collected aliases are stored lowercased.
 
 ### Adding a language
 

@@ -1180,9 +1180,8 @@ var require_matcher = __commonJS({
             }
           }
       },
-      // Canonicals of every glossary term whose form matches `text` (single- or
-      // multi-word), optionally excluding one term. Reuses the matching engine, so a
-      // collision found here means the same thing it does for highlighting.
+      // Canonicals of every term whose form matches `text`, optionally excluding one.
+      // Runs the same matcher as highlighting, so collisions agree with what gets linked.
       termsMatchingText(text, except) {
         const out = /* @__PURE__ */ new Set();
         for (const m of this.findMatches(text, null)) {
@@ -1711,10 +1710,10 @@ var require_actions = __commonJS({
   "src/actions.js"(exports2, module2) {
     "use strict";
     var { Menu, Notice: Notice2 } = require("obsidian");
+    var { splitLines: splitLines2 } = require_constants();
     var { MaterializePreviewModal, HarvestPreviewModal, ChooseTermModal } = require_modals();
     module2.exports = {
-      // The matches to link in a note: findMatches, then (optionally) first-per-term.
-      // Ambiguous matches keep their `alts`, so the preview can let the user pick a term.
+      // Ambiguous matches keep their `alts` so the preview can let the user pick a term.
       collectMatches(text, currentCanonical) {
         const matches = this.findMatches(text, currentCanonical, { protect: true });
         if (!this.settings.linkFirstOnly)
@@ -1790,8 +1789,6 @@ var require_actions = __commonJS({
           new Notice2(`Glossary Linker: ${results[0].count} link(s) created`);
         });
       },
-      // Scan in-scope notes with compute(text, file) -> matches[], keeping only files
-      // with matches, with a progress notice.
       async scanScopeMatches(compute) {
         const files = this.getScopeFiles();
         const out = [];
@@ -1863,8 +1860,6 @@ var require_actions = __commonJS({
         this.updateStatusBar();
         await this.app.workspace.getLeaf("tab").openFile(file);
       },
-      // Run `action(term)`. With one candidate it runs straight away; with several
-      // (an alias collision) it first asks which term via a modal.
       chooseTerm(candidates, title, action) {
         const list = (candidates || []).filter(Boolean);
         if (list.length <= 1)
@@ -1918,9 +1913,8 @@ var require_actions = __commonJS({
         menu.showAtMouseEvent(evt);
         return true;
       },
-      // Append a value to a newline list setting (excludeWords / excludeTerms) and apply it.
       async addToExclusion(listKey, value) {
-        const lines = (this.settings[listKey] || "").split("\n").map((s) => s.trim()).filter(Boolean);
+        const lines = splitLines2(this.settings[listKey]);
         if (lines.some((l) => l.toLowerCase() === value.toLowerCase())) {
           new Notice2(`Glossary Linker: "${value}" is already excluded`);
           return;
@@ -2528,8 +2522,7 @@ var GlossaryLinkerPlugin = class extends Plugin {
     const base = path.split("/").pop();
     return base.replace(/\.md$/, "");
   }
-  // The wikilink under the editor cursor if it points to a glossary term, else null.
-  // Returns { canonical, display } (display = the link's visible text).
+  // The wikilink under the cursor if it points to a glossary term: { canonical, display }, else null.
   glossaryLinkAt(editor) {
     const pos = editor.getCursor();
     const line = editor.getLine(pos.line);
@@ -2569,7 +2562,6 @@ var GlossaryLinkerPlugin = class extends Plugin {
       return `[[${canonical}]]`;
     return inTable ? `[[${canonical}\\|${display}]]` : `[[${canonical}|${display}]]`;
   }
-  // A line counts as a table row if it contains a pipe.
   inTableCell(text, pos) {
     const ls = text.lastIndexOf("\n", pos - 1) + 1;
     let le = text.indexOf("\n", pos);

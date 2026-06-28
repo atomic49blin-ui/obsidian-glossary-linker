@@ -17,7 +17,6 @@ function fold(word) {
     .replace(/[èéêë]/g, 'e').replace(/[ùúûü]/g, 'u').replace(/[ìíîï]/g, 'i');
 }
 
-// UniNE Spanish light stemmer.
 function stem(word) {
   const s = fold(word);
   const len = s.length;
@@ -32,7 +31,6 @@ function stem(word) {
   return s;
 }
 
-// Light plural strip (endingStrip mode).
 function strip(word) {
   const s = fold(word);
   if (s.length > 4 && s.endsWith('ces')) return s.slice(0, -3) + 'z';
@@ -41,14 +39,12 @@ function strip(word) {
   return s;
 }
 
-// Comparison keys for stemmer mode.
 function stemKeys(word) {
   const a = stem(word);
   const b = strip(word);
   return a === b ? [a] : [a, b];
 }
 
-// Base form for collected aliases.
 function lemma(word) {
   return strip(word);
 }

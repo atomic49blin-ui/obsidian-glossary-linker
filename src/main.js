@@ -29,7 +29,7 @@ class GlossaryLinkerPlugin extends Plugin {
     this.excludeWordKeys = new Set();
     this.keysCache = new Map();
     this.terms = [];
-    this._indexListeners = new Set(); // API onChange subscribers; must exist before the first rebuild
+    this._indexListeners = new Set(); // API onChange subscribers; needed before the first rebuild
 
     await this.loadLanguages();
     this.rebuildIndex();
@@ -157,8 +157,7 @@ class GlossaryLinkerPlugin extends Plugin {
   }
 
   async loadLanguages() {
-    // Validate the bundled modules; a malformed one is dropped and listed in
-    // settings rather than breaking the index. Nothing is loaded at runtime.
+    // Drop malformed modules and surface them in settings instead of breaking the index.
     this.languages = [];
     this.languageErrors = [];
     const seen = new Set();
@@ -254,8 +253,7 @@ class GlossaryLinkerPlugin extends Plugin {
     return base.replace(/\.md$/, '');
   }
 
-  // The wikilink under the editor cursor if it points to a glossary term, else null.
-  // Returns { canonical, display } (display = the link's visible text).
+  // The wikilink under the cursor if it points to a glossary term: { canonical, display }, else null.
   glossaryLinkAt(editor) {
     const pos = editor.getCursor();
     const line = editor.getLine(pos.line);
@@ -295,7 +293,6 @@ class GlossaryLinkerPlugin extends Plugin {
     return inTable ? `[[${canonical}\\|${display}]]` : `[[${canonical}|${display}]]`;
   }
 
-  // A line counts as a table row if it contains a pipe.
   inTableCell(text, pos) {
     const ls = text.lastIndexOf('\n', pos - 1) + 1;
     let le = text.indexOf('\n', pos);

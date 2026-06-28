@@ -31,7 +31,6 @@ const ENDINGS = [
 
 const VOWELS = 'аеёиоуыэюя';
 
-// Aggressive root (stemmer mode).
 function stem(word) {
   word = word.toLowerCase().replace(/ё/g, 'е');
   const m = RVRE.exec(word);
@@ -66,7 +65,6 @@ function stem(word) {
   return pre + rv;
 }
 
-// Light ending strip (endingStrip mode).
 function strip(word) {
   word = word.toLowerCase().replace(/ё/g, 'е');
   for (const e of ENDINGS) {
@@ -93,7 +91,6 @@ function softStemNoun(word) {
   return null;
 }
 
-// Base (dictionary) form for collected aliases.
 function lemma(word) {
   return softStemNoun(word) || strip(word);
 }

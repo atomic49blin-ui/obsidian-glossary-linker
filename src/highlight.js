@@ -41,12 +41,10 @@ module.exports = {
       const display = m.display;
       const a = document.createElement('a');
       a.textContent = display;
-      // data-glossary-target identifies the term for occurrence counting in both cases.
-      a.setAttribute('data-glossary-target', canonical);
+      a.setAttribute('data-glossary-target', canonical); // used for occurrence counting below
       if (m.alts && m.alts.length) {
-        // Ambiguous: no data-href, so Obsidian shows no single (misleading) page
-        // preview — just the aria-label tooltip listing every matching term. Click
-        // asks which term to open.
+        // Ambiguous: no data-href, so Obsidian shows no (misleading) single-page
+        // preview, just the aria-label tooltip. Click asks which term to open.
         a.className = 'glossary-link glossary-ambiguous';
         const candidates = [canonical, ...m.alts];
         a.setAttribute('aria-label', 'Matches: ' + candidates.join(', '));
@@ -56,8 +54,8 @@ module.exports = {
           this.chooseTerm(candidates, newTab ? 'Open in new tab…' : 'Open…', (c) => this.openTerm(c, sourcePath, newTab));
         };
         a.addEventListener('click', (e) => pick(e, e.ctrlKey || e.metaKey));
-        // Middle-click fires auxclick, not click; suppress the default new-tab nav on
-        // mousedown so it routes through the picker too.
+        // Middle-click fires auxclick; suppress the default new-tab nav so it routes
+        // through the picker too.
         a.addEventListener('auxclick', (e) => { if (e.button === 1) pick(e, true); });
         a.addEventListener('mousedown', (e) => { if (e.button === 1) { e.preventDefault(); e.stopPropagation(); } });
       } else {

@@ -41,7 +41,6 @@ function step2(s, len) {
   return len;
 }
 
-// UniNE German light stemmer.
 function stem(word) {
   const s = fold(word);
   let len = s.length;
@@ -50,7 +49,6 @@ function stem(word) {
   return s.slice(0, len);
 }
 
-// Light plural/case strip (endingStrip mode).
 function strip(word) {
   const s = fold(word);
   for (const e of ['en', 'er', 'es', 'e', 'n', 's']) {
@@ -59,14 +57,12 @@ function strip(word) {
   return s;
 }
 
-// Comparison keys for stemmer mode.
 function stemKeys(word) {
   const a = stem(word);
   const b = strip(word);
   return a === b ? [a] : [a, b];
 }
 
-// Base form for collected aliases.
 function lemma(word) {
   return strip(word);
 }

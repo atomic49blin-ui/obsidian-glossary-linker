@@ -109,21 +109,18 @@ function fold(word) {
     .replace(/[ùûü]/g, 'u').replace(/[îï]/g, 'i').replace(/ç/g, 'c').replace(/ÿ/g, 'y');
 }
 
-// Light plural strip (endingStrip mode).
 function strip(word) {
   const s = fold(word);
   if (s.length > 3 && (s.endsWith('s') || s.endsWith('x'))) return s.slice(0, -1);
   return s;
 }
 
-// Comparison keys for stemmer mode.
 function stemKeys(word) {
   const a = stem(word);
   const b = strip(word);
   return a === b ? [a] : [a, b];
 }
 
-// Base form for collected aliases.
 function lemma(word) {
   return strip(word);
 }
