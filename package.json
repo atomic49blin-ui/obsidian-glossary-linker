@@ -1,6 +1,6 @@
 {
   "name": "obsidian-glossary-linker",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Obsidian plugin: highlight glossary terms in any word form, turn them into links, collect aliases.",
   "author": "max-fluff",
   "license": "MIT",
@@ -10,8 +10,7 @@
   },
   "private": true,
   "scripts": {
-    "build": "node esbuild.config.mjs",
-    "test": "node test/run.js"
+    "build": "node esbuild.config.mjs"
   },
   "devDependencies": {
     "esbuild": "0.17.19"

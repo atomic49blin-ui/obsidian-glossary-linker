@@ -1,6 +1,6 @@
 'use strict';
 
-const { PluginSettingTab, Setting, Notice } = require('obsidian');
+const { PluginSettingTab, Setting, Notice, TFolder } = require('obsidian');
 const { sanitizeFolder } = require('./constants');
 const { FolderSuggest, FileSuggest, folderSuggestAvailable } = require('./folder-suggest');
 
@@ -19,7 +19,7 @@ class GlossaryLinkerSettingTab extends PluginSettingTab {
     // Scope changes don't touch the term index, so refresh views without a rebuild.
     const saveScope = async () => { await this.plugin.saveSettings(); this.plugin.rerenderViews(); this.plugin.updateStatusBar(); this.plugin.refreshOverviewDebounced(); };
 
-    containerEl.createEl('h3', { text: 'Scope' });
+    new Setting(containerEl).setName('Scope').setHeading();
 
     new Setting(containerEl)
       .setName('Glossary folder')
@@ -61,7 +61,7 @@ class GlossaryLinkerSettingTab extends PluginSettingTab {
       .setDesc('One path per line — a file or a folder, never highlighted, linked or scanned, whatever the mode above is.')
       .addTextArea((t) => { t.setValue(s.excludeFolders).onChange(async (v) => { s.excludeFolders = v; await saveScope(); }); t.inputEl.rows = 3; });
 
-    containerEl.createEl('h3', { text: 'Matching' });
+    new Setting(containerEl).setName('Matching').setHeading();
 
     new Setting(containerEl)
       .setName('Morphology')
@@ -136,7 +136,7 @@ class GlossaryLinkerSettingTab extends PluginSettingTab {
       .setDesc('Surface words, one per line, that never trigger a link even if they match a term.')
       .addTextArea((t) => { t.setValue(s.excludeWords).onChange(async (v) => { s.excludeWords = v; await save(true); }); t.inputEl.rows = 3; });
 
-    containerEl.createEl('h3', { text: 'Highlighting' });
+    new Setting(containerEl).setName('Highlighting').setHeading();
 
     new Setting(containerEl)
       .setName('Highlight in Reading view')
@@ -168,7 +168,7 @@ class GlossaryLinkerSettingTab extends PluginSettingTab {
       .setDesc('Also count terms already linked directly, not only plain-text mentions.')
       .addToggle((t) => t.setValue(s.statusBarIncludeLinks).onChange(async (v) => { s.statusBarIncludeLinks = v; await save(false); this.plugin.updateStatusBar(); }));
 
-    containerEl.createEl('h3', { text: 'Autocomplete' });
+    new Setting(containerEl).setName('Autocomplete').setHeading();
 
     new Setting(containerEl)
       .setName('Suggest links while typing')
@@ -180,7 +180,7 @@ class GlossaryLinkerSettingTab extends PluginSettingTab {
       .setDesc('How many characters to type before suggestions appear.')
       .addText((t) => { t.inputEl.type = 'number'; t.inputEl.min = '1'; t.setValue(String(s.suggestMinChars)).onChange(async (v) => { const n = parseInt(v, 10); s.suggestMinChars = Number.isFinite(n) && n > 0 ? n : 1; await save(false); }); });
 
-    containerEl.createEl('h3', { text: 'Collecting aliases' });
+    new Setting(containerEl).setName('Collecting aliases').setHeading();
     containerEl.createEl('div', { cls: 'glossary-section-desc', text: 'Reads the links you already made by hand, like [[Term|some wording]], and adds that wording to the term\'s aliases — so the same wording links automatically next time.' });
 
     new Setting(containerEl)
@@ -218,7 +218,7 @@ class GlossaryLinkerSettingTab extends PluginSettingTab {
       .setDesc('When collecting an alias or creating a term, flag wording that already matches a different term (so you can avoid making a word point at two terms).')
       .addToggle((t) => t.setValue(s.aliasCollisionWarnings).onChange(async (v) => { s.aliasCollisionWarnings = v; await save(false); }));
 
-    containerEl.createEl('h3', { text: 'Context menu' });
+    new Setting(containerEl).setName('Context menu').setHeading();
 
     new Setting(containerEl)
       .setName('"Link to term" items')
@@ -250,14 +250,14 @@ class GlossaryLinkerSettingTab extends PluginSettingTab {
       .setDesc('Show "Glossary: unlink this term" when right-clicking an existing glossary link.')
       .addToggle((t) => t.setValue(s.menuUnlink).onChange(async (v) => { s.menuUnlink = v; await save(false); }));
 
-    containerEl.createEl('h3', { text: 'Overview' });
+    new Setting(containerEl).setName('Overview').setHeading();
 
     new Setting(containerEl)
       .setName('Ribbon icon')
       .setDesc('Show a ribbon button that opens the glossary overview panel. The "Open glossary overview" command works either way.')
       .addToggle((t) => t.setValue(s.showRibbonIcon).onChange(async (v) => { s.showRibbonIcon = v; await save(false); this.plugin.applyRibbonIcon(); }));
 
-    containerEl.createEl('h3', { text: 'Maintenance' });
+    new Setting(containerEl).setName('Maintenance').setHeading();
 
     new Setting(containerEl)
       .setName('Rebuild glossary index')
@@ -280,7 +280,7 @@ class GlossaryLinkerSettingTab extends PluginSettingTab {
     el.removeClass('glossary-lang-error');
     const path = (this.plugin.settings.glossaryFolder || '').replace(/\/+$/, '');
     const f = path ? this.app.vault.getAbstractFileByPath(path) : null;
-    const isFolder = !!f && f.children !== undefined; // TFolder exposes children
+    const isFolder = f instanceof TFolder;
     if (!isFolder) {
       el.addClass('glossary-lang-error');
       el.setText('⚠ Folder not found — no terms will be indexed.');

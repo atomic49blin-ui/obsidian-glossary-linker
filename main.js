@@ -894,7 +894,7 @@ var require_folder_suggest = __commonJS({
 var require_settings_tab = __commonJS({
   "src/settings-tab.js"(exports2, module2) {
     "use strict";
-    var { PluginSettingTab, Setting, Notice: Notice2 } = require("obsidian");
+    var { PluginSettingTab, Setting, Notice: Notice2, TFolder: TFolder2 } = require("obsidian");
     var { sanitizeFolder: sanitizeFolder2 } = require_constants();
     var { FolderSuggest, FileSuggest, folderSuggestAvailable } = require_folder_suggest();
     var GlossaryLinkerSettingTab2 = class extends PluginSettingTab {
@@ -920,7 +920,7 @@ var require_settings_tab = __commonJS({
           this.plugin.updateStatusBar();
           this.plugin.refreshOverviewDebounced();
         };
-        containerEl.createEl("h3", { text: "Scope" });
+        new Setting(containerEl).setName("Scope").setHeading();
         new Setting(containerEl).setName("Glossary folder").setDesc("Folder with one note per term (file name = the term title).").addText((t) => {
           t.setValue(s.glossaryFolder).onChange(async (v) => {
             s.glossaryFolder = sanitizeFolder2(v);
@@ -962,7 +962,7 @@ var require_settings_tab = __commonJS({
           });
           t.inputEl.rows = 3;
         });
-        containerEl.createEl("h3", { text: "Matching" });
+        new Setting(containerEl).setName("Matching").setHeading();
         new Setting(containerEl).setName("Morphology").setDesc("How an inflected word is matched to a term.").addDropdown((d) => d.addOption("stemmer", "Stemmer (recommended)").addOption("endingStrip", "Ending strip").addOption("exact", "Exact match").setValue(s.matchMode).onChange(async (v) => {
           s.matchMode = v;
           await save(true);
@@ -1030,7 +1030,7 @@ var require_settings_tab = __commonJS({
           });
           t.inputEl.rows = 3;
         });
-        containerEl.createEl("h3", { text: "Highlighting" });
+        new Setting(containerEl).setName("Highlighting").setHeading();
         new Setting(containerEl).setName("Highlight in Reading view").setDesc("Underline detected terms as clickable links in Reading view (file unchanged).").addToggle((t) => t.setValue(s.highlightInReading).onChange(async (v) => {
           s.highlightInReading = v;
           await save(false);
@@ -1056,7 +1056,7 @@ var require_settings_tab = __commonJS({
           await save(false);
           this.plugin.updateStatusBar();
         }));
-        containerEl.createEl("h3", { text: "Autocomplete" });
+        new Setting(containerEl).setName("Autocomplete").setHeading();
         new Setting(containerEl).setName("Suggest links while typing").setDesc("As you type in an in-scope note, offer to insert a [[link]] to a matching glossary term (prefix of a title/alias, or an inflected form).").addToggle((t) => t.setValue(s.linkSuggest).onChange(async (v) => {
           s.linkSuggest = v;
           await save(false);
@@ -1070,7 +1070,7 @@ var require_settings_tab = __commonJS({
             await save(false);
           });
         });
-        containerEl.createEl("h3", { text: "Collecting aliases" });
+        new Setting(containerEl).setName("Collecting aliases").setHeading();
         containerEl.createEl("div", { cls: "glossary-section-desc", text: "Reads the links you already made by hand, like [[Term|some wording]], and adds that wording to the term's aliases \u2014 so the same wording links automatically next time." });
         new Setting(containerEl).setName("Alias form").setDesc("How collected link text is stored as an alias.").addDropdown((d) => d.addOption("lemma", "Base form").addOption("literal", "As written").addOption("both", "Both").setValue(s.aliasHarvestMode).onChange(async (v) => {
           s.aliasHarvestMode = v;
@@ -1097,7 +1097,7 @@ var require_settings_tab = __commonJS({
           s.aliasCollisionWarnings = v;
           await save(false);
         }));
-        containerEl.createEl("h3", { text: "Context menu" });
+        new Setting(containerEl).setName("Context menu").setHeading();
         new Setting(containerEl).setName('"Link to term" items').setDesc('Show the "Link to term" / "Link all \u2026 to term" actions when right-clicking a highlighted term.').addToggle((t) => t.setValue(s.menuTurnInto).onChange(async (v) => {
           s.menuTurnInto = v;
           await save(false);
@@ -1122,13 +1122,13 @@ var require_settings_tab = __commonJS({
           s.menuUnlink = v;
           await save(false);
         }));
-        containerEl.createEl("h3", { text: "Overview" });
+        new Setting(containerEl).setName("Overview").setHeading();
         new Setting(containerEl).setName("Ribbon icon").setDesc('Show a ribbon button that opens the glossary overview panel. The "Open glossary overview" command works either way.').addToggle((t) => t.setValue(s.showRibbonIcon).onChange(async (v) => {
           s.showRibbonIcon = v;
           await save(false);
           this.plugin.applyRibbonIcon();
         }));
-        containerEl.createEl("h3", { text: "Maintenance" });
+        new Setting(containerEl).setName("Maintenance").setHeading();
         new Setting(containerEl).setName("Rebuild glossary index").setDesc("Re-scan the glossary folder now.").addButton((b) => b.setButtonText("Rebuild").onClick(() => {
           this.plugin.rebuildIndex();
           new Notice2("Glossary Linker: index rebuilt");
@@ -1150,7 +1150,7 @@ var require_settings_tab = __commonJS({
         el.removeClass("glossary-lang-error");
         const path = (this.plugin.settings.glossaryFolder || "").replace(/\/+$/, "");
         const f = path ? this.app.vault.getAbstractFileByPath(path) : null;
-        const isFolder = !!f && f.children !== void 0;
+        const isFolder = f instanceof TFolder2;
         if (!isFolder) {
           el.addClass("glossary-lang-error");
           el.setText("\u26A0 Folder not found \u2014 no terms will be indexed.");
@@ -2971,7 +2971,7 @@ var GlossaryLinkerPlugin = class extends Plugin {
     this.refreshOverviewDebounced = debounce(() => this.refreshOverview(), 800, true);
     this.statusBarEl = this.addStatusBarItem();
     this.statusBarEl.addClass("mod-clickable");
-    this.statusBarEl.addEventListener("click", () => this.materializeCurrent());
+    this.registerDomEvent(this.statusBarEl, "click", () => this.materializeCurrent());
     this.updateStatusBarDebounced = debounce(() => this.updateStatusBar(), 400, true);
     this.registerEvent(this.app.workspace.on("file-open", () => this.updateStatusBarDebounced()));
     this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.updateStatusBarDebounced()));
@@ -3402,6 +3402,8 @@ var GlossaryLinkerPlugin = class extends Plugin {
     let leaf = workspace.getLeavesOfType(OVERVIEW_VIEW_TYPE)[0];
     if (!leaf) {
       leaf = workspace.getRightLeaf(false);
+      if (!leaf)
+        return;
       await leaf.setViewState({ type: OVERVIEW_VIEW_TYPE, active: true });
     }
     workspace.revealLeaf(leaf);

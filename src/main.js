@@ -40,7 +40,7 @@ class GlossaryLinkerPlugin extends Plugin {
 
     this.statusBarEl = this.addStatusBarItem();
     this.statusBarEl.addClass('mod-clickable');
-    this.statusBarEl.addEventListener('click', () => this.materializeCurrent());
+    this.registerDomEvent(this.statusBarEl, 'click', () => this.materializeCurrent());
     this.updateStatusBarDebounced = debounce(() => this.updateStatusBar(), 400, true);
     this.registerEvent(this.app.workspace.on('file-open', () => this.updateStatusBarDebounced()));
     this.registerEvent(this.app.workspace.on('active-leaf-change', () => this.updateStatusBarDebounced()));
@@ -468,6 +468,7 @@ class GlossaryLinkerPlugin extends Plugin {
     let leaf = workspace.getLeavesOfType(OVERVIEW_VIEW_TYPE)[0];
     if (!leaf) {
       leaf = workspace.getRightLeaf(false);
+      if (!leaf) return;
       await leaf.setViewState({ type: OVERVIEW_VIEW_TYPE, active: true });
     }
     workspace.revealLeaf(leaf);
