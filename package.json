@@ -10,7 +10,8 @@
   },
   "private": true,
   "scripts": {
-    "build": "node esbuild.config.mjs"
+    "build": "node esbuild.config.mjs",
+    "test": "node test/run.js"
   },
   "devDependencies": {
     "esbuild": "0.17.19"

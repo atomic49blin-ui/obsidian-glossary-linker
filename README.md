@@ -4,7 +4,7 @@
 
 # Glossary Linker
 
-Highlights glossary terms in your notes in any word form (declensions, plurals), lets you turn them into real links, and picks up new aliases from links you've already made by hand. It grew out of the discontinued Virtual Linker, but it matches inflected forms instead of exact spellings only.
+Highlights glossary terms in your notes in any word form (declensions, plurals), lets you turn them into real links, and picks up new aliases from links you've already made by hand. It was inspired by Virtual Linker, but it matches inflected forms instead of exact spellings only.
 
 <p align="center">
   <img src="docs/images/hero.png" alt="One note with glossary terms highlighted in several word forms and in two languages" width="700">
@@ -88,7 +88,7 @@ Across the whole vault, replacements are grouped by file, with a single picker a
 
 ### Collect aliases from links you made
 
-This scans for `[[Term|some wording]]` links you wrote by hand. If `Term` is a glossary note and the wording is custom, that wording becomes a new alias for the term. By default the wording is reduced to a base form first (`[[fruit|fruits]] → fruit`). Aliases are de-duplicated case-insensitively, and nothing is added if the word already matches anyway. Run it as a command or automatically on save. The preview gives each alias a checkbox, flags aliases that would collide with another term with ⚠, and lists candidates skipped for already existing separately.
+This scans for `[[Term|some wording]]` links you wrote by hand. If `Term` is a glossary note and the wording is custom, that wording becomes a new alias for the term; inline code and emphasis (`` `code` ``, *italics*) are stripped from it first. By default the wording is reduced to a base form (`[[fruit|fruits]] → fruit`). Aliases are de-duplicated case-insensitively, and nothing is added if the term already matches that wording anyway. Run it as a command or automatically on save. The preview gives each alias a checkbox, flags aliases that would collide with another term with ⚠ and leaves those unchecked, and lists separately the candidates skipped for already existing. A silent (on-save) collect skips colliding aliases entirely.
 
 <p align="center">
   <img src="docs/images/collect-aliases-2.png" alt="The collect-aliases preview: new aliases with checkboxes, a collision flagged with a warning, and skipped candidates listed below" width="540">

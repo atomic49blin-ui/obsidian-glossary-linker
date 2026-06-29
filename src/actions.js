@@ -29,9 +29,15 @@ module.exports = {
     let total = 0;
     let skipped = 0;
     for (const r of results) {
-      if ((await this.app.vault.read(r.file)) !== r.original) { skipped++; continue; }
-      await this.app.vault.modify(r.file, r.newText);
-      total += r.count;
+      let written = false;
+      // process reads and writes atomically; the guard inside drops notes touched since the preview.
+      await this.app.vault.process(r.file, (data) => {
+        if (data !== r.original) return data;
+        written = true;
+        return r.newText;
+      });
+      if (written) total += r.count;
+      else skipped++;
     }
     let msg = `Glossary Linker: ${results.length - skipped} file(s), ${total} link(s)`;
     if (skipped) msg += `, ${skipped} skipped (changed since preview)`;
@@ -47,11 +53,16 @@ module.exports = {
     if (!matches.length) { new Notice('Glossary Linker: no matches found'); return; }
     this.openMaterializePreview([{ file, original: text, matches }], async (results) => {
       const r = results[0];
-      if ((await this.app.vault.read(r.file)) !== r.original) {
+      let written = false;
+      await this.app.vault.process(r.file, (data) => {
+        if (data !== r.original) return data;
+        written = true;
+        return r.newText;
+      });
+      if (!written) {
         new Notice('Glossary Linker: note changed since preview, nothing written');
         return;
       }
-      await this.app.vault.modify(r.file, r.newText);
       new Notice(`Glossary Linker: ${r.count} link(s) created`);
       this.updateStatusBar();
     });
@@ -320,19 +331,22 @@ module.exports = {
   // linkAs (optional) overrides which term the occurrence is linked to — used when
   // a word matches several terms and the user picks an alternative from the menu.
   async materializeSingle(file, canonical, display, nearOffset, occurrence, linkAs) {
-    const text = await this.app.vault.read(file);
-    const matches = this.findMatches(text, this.canonicalForPath(file.path), { protect: true })
-      .filter((m) => m.canonical === canonical && m.display === display);
-    if (!matches.length) { new Notice('Glossary Linker: occurrence not found'); return; }
-    let target = matches[0];
-    if (occurrence != null && matches[occurrence]) {
-      target = matches[occurrence];
-    } else if (nearOffset != null) {
-      target = matches.reduce((best, m) => (Math.abs(m.start - nearOffset) < Math.abs(best.start - nearOffset) ? m : best), matches[0]);
-    }
-    const chosen = (linkAs && linkAs !== target.canonical) ? { ...target, canonical: linkAs } : target;
-    const { newText } = this.applyLinks(text, [chosen]);
-    await this.app.vault.modify(file, newText);
+    let created = false;
+    await this.app.vault.process(file, (text) => {
+      const matches = this.findMatches(text, this.canonicalForPath(file.path), { protect: true })
+        .filter((m) => m.canonical === canonical && m.display === display);
+      if (!matches.length) return text;
+      let target = matches[0];
+      if (occurrence != null && matches[occurrence]) {
+        target = matches[occurrence];
+      } else if (nearOffset != null) {
+        target = matches.reduce((best, m) => (Math.abs(m.start - nearOffset) < Math.abs(best.start - nearOffset) ? m : best), matches[0]);
+      }
+      const chosen = (linkAs && linkAs !== target.canonical) ? { ...target, canonical: linkAs } : target;
+      created = true;
+      return this.applyLinks(text, [chosen]).newText;
+    });
+    if (!created) { new Notice('Glossary Linker: occurrence not found'); return; }
     new Notice('Glossary Linker: link created');
     this.updateStatusBar();
   },
@@ -340,15 +354,18 @@ module.exports = {
   // linkAs (optional) links the matched occurrences to a chosen alternative term
   // instead of the one findMatches picked (used to resolve an alias collision).
   async materializeTerm(file, canonical, linkAs) {
-    const text = await this.app.vault.read(file);
-    let matches = this.findMatches(text, this.canonicalForPath(file.path), { protect: true })
-      .filter((m) => m.canonical === canonical);
-    if (!matches.length) { new Notice('Glossary Linker: no occurrences found'); return; }
-    if (this.settings.linkFirstOnly) matches = matches.slice(0, 1);
-    if (linkAs && linkAs !== canonical) matches = matches.map((m) => ({ ...m, canonical: linkAs }));
-    const { newText } = this.applyLinks(text, matches);
-    await this.app.vault.modify(file, newText);
-    new Notice(`Glossary Linker: ${matches.length} link(s) created`);
+    let count = 0;
+    await this.app.vault.process(file, (text) => {
+      let matches = this.findMatches(text, this.canonicalForPath(file.path), { protect: true })
+        .filter((m) => m.canonical === canonical);
+      if (!matches.length) return text;
+      if (this.settings.linkFirstOnly) matches = matches.slice(0, 1);
+      if (linkAs && linkAs !== canonical) matches = matches.map((m) => ({ ...m, canonical: linkAs }));
+      count = matches.length;
+      return this.applyLinks(text, matches).newText;
+    });
+    if (!count) { new Notice('Glossary Linker: no occurrences found'); return; }
+    new Notice(`Glossary Linker: ${count} link(s) created`);
     this.updateStatusBar();
   },
 
@@ -365,17 +382,27 @@ module.exports = {
     this.openMaterializePreview(files, (results) => this.writeScopeResults(results));
   },
 
-  // Keys and literals of a term's existing forms, so harvesting can skip what already matches.
-  termFormKeys(file) {
-    const forms = [file.basename, ...this.aliasesOf(file)].filter((x) => typeof x === 'string' && x.trim());
-    const keys = new Set();
-    const literals = new Set();
-    for (const form of forms) {
-      literals.add(form.toLowerCase());
-      const words = this.tokenizeForm(form);
-      if (words.length === 1) for (const k of words[0].keys) keys.add(k);
+  termLiterals(file) {
+    const out = new Set();
+    for (const form of [file.basename, ...this.aliasesOf(file)]) {
+      if (typeof form === 'string' && form.trim()) out.add(form.toLowerCase());
     }
-    return { keys, literals };
+    return out;
+  },
+
+  // Obsidian keeps inline markup in displayText; drop it so `code`/*em* doesn't reach an alias.
+  // Returns '' (skip the link) when no letters survive.
+  normalizeDisplay(display) {
+    if (typeof display !== 'string') return '';
+    const clean = display.replace(/[`*_~]/g, '').replace(/\s+/g, ' ').trim();
+    return /\p{L}/u.test(clean) ? clean : '';
+  },
+
+  partialOfMultiwordTitle(file, cand) {
+    const words = this.tokenizeForm(file.basename);
+    if (words.length < 2) return false;
+    const keys = this.keysFor(cand);
+    return words.some((w) => w.keys.some((k) => keys.includes(k)));
   },
 
   harvestCandidates(display) {
@@ -389,6 +416,17 @@ module.exports = {
     return [...new Set(out)].filter((a) => a && a.length >= min);
   },
 
+  // Fills `add` (cand → collidesWith) and `skip` from one link's display. Shared by both harvest paths.
+  collectAliasesFromDisplay(file, display, literals, add, skip) {
+    if (this.termsMatchingText(display).includes(file.basename)) return; // an existing form already matches
+    for (const cand of this.harvestCandidates(display)) {
+      if (add.has(cand)) continue;
+      if (literals.has(cand)) { skip.add(cand); continue; }
+      if (this.partialOfMultiwordTitle(file, cand)) { skip.add(cand); continue; }
+      add.set(cand, this.settings.aliasCollisionWarnings ? this.termsMatchingText(cand, file.basename) : []);
+    }
+  },
+
   async harvestFiles(files, silent) {
     const perTerm = new Map();
 
@@ -396,30 +434,25 @@ module.exports = {
       const cache = this.app.metadataCache.getFileCache(file);
       if (!cache || !cache.links) continue;
       for (const link of cache.links) {
-        const display = link.displayText;
+        const display = this.normalizeDisplay(link.displayText);
         if (!display) continue;
         const targetFile = this.app.metadataCache.getFirstLinkpathDest(link.link, file.path);
         if (!targetFile || !this.isGlossaryFile(targetFile)) continue;
         if (display.toLowerCase() === targetFile.basename.toLowerCase()) continue;
 
         let entry = perTerm.get(targetFile.path);
-        if (!entry) { entry = { file: targetFile, add: new Map(), skip: new Set(), info: this.termFormKeys(targetFile) }; perTerm.set(targetFile.path, entry); }
-
-        for (const cand of this.harvestCandidates(display)) {
-          if (entry.info.literals.has(cand)) { entry.skip.add(cand); continue; }                 // already the title or an alias
-          if (entry.add.has(cand)) continue;                                                     // already queued
-          if (this.keysFor(cand).some((k) => entry.info.keys.has(k))) { entry.skip.add(cand); continue; } // already matched
-          // Would adding this alias make the word point at more than one term?
-          const collidesWith = this.settings.aliasCollisionWarnings ? this.termsMatchingText(cand, entry.file.basename) : [];
-          entry.add.set(cand, { source: display, collidesWith });
-        }
+        if (!entry) { entry = { file: targetFile, add: new Map(), skip: new Set(), literals: this.termLiterals(targetFile) }; perTerm.set(targetFile.path, entry); }
+        this.collectAliasesFromDisplay(targetFile, display, entry.literals, entry.add, entry.skip);
       }
     }
 
     const additions = [];
     for (const entry of perTerm.values()) {
-      if (!entry.add.size) continue;
-      const aliases = [...entry.add.entries()].map(([text, meta]) => ({ text, collidesWith: meta.collidesWith }));
+      let chosen = [...entry.add.entries()];
+      // No preview to vet a collision in a silent run — drop it.
+      if (silent) chosen = chosen.filter(([, collidesWith]) => !collidesWith.length);
+      if (!chosen.length) continue;
+      const aliases = chosen.map(([text, collidesWith]) => ({ text, collidesWith }));
       additions.push({ file: entry.file, aliases, skipped: [...entry.skip] });
     }
     if (!additions.length) { if (!silent) new Notice('Glossary Linker: no new aliases found'); return; }
@@ -450,23 +483,17 @@ module.exports = {
 
   // Collect just one link's wording as an alias for its term — the per-link version of
   // harvestFiles, reusing the same candidate rules, collision check and preview/apply.
-  async harvestOneLink(targetFile, display) {
+  async harvestOneLink(targetFile, rawDisplay) {
+    const display = this.normalizeDisplay(rawDisplay);
     if (!targetFile || !this.isGlossaryFile(targetFile) || !display) return;
     if (display.toLowerCase() === targetFile.basename.toLowerCase()) {
       new Notice('Glossary Linker: that wording already matches the term'); return;
     }
-    const info = this.termFormKeys(targetFile);
     const add = new Map();
     const skip = new Set();
-    for (const cand of this.harvestCandidates(display)) {
-      if (info.literals.has(cand)) { skip.add(cand); continue; }
-      if (add.has(cand)) continue;
-      if (this.keysFor(cand).some((k) => info.keys.has(k))) { skip.add(cand); continue; }
-      const collidesWith = this.settings.aliasCollisionWarnings ? this.termsMatchingText(cand, targetFile.basename) : [];
-      add.set(cand, { collidesWith });
-    }
+    this.collectAliasesFromDisplay(targetFile, display, this.termLiterals(targetFile), add, skip);
     if (!add.size) { new Notice('Glossary Linker: no new alias to collect'); return; }
-    const aliases = [...add.entries()].map(([text, meta]) => ({ text, collidesWith: meta.collidesWith }));
+    const aliases = [...add.entries()].map(([text, collidesWith]) => ({ text, collidesWith }));
     const additions = [{ file: targetFile, aliases, skipped: [...skip] }];
     new HarvestPreviewModal(this.app, additions, (selected) => this.applyHarvest(selected)).open();
   },

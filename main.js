@@ -1793,11 +1793,13 @@ var require_modals = __commonJS({
           contentEl.createDiv({ cls: "glossary-preview-file", text: a.file.basename });
           const list = contentEl.createDiv({ cls: "glossary-harvest-list" });
           for (const al of a.aliases) {
-            this.checked.add(al);
+            const collides = al.collidesWith && al.collidesWith.length;
+            if (!collides)
+              this.checked.add(al);
             const row = list.createDiv({ cls: "glossary-harvest-alias" });
             const label = row.createEl("label");
             const cb = label.createEl("input", { type: "checkbox" });
-            cb.checked = true;
+            cb.checked = !collides;
             cb.onchange = () => {
               if (cb.checked)
                 this.checked.add(al);
@@ -1805,7 +1807,7 @@ var require_modals = __commonJS({
                 this.checked.delete(al);
             };
             label.createSpan({ cls: "glossary-add", text: al.text });
-            if (al.collidesWith && al.collidesWith.length) {
+            if (collides) {
               const warn = row.createSpan({ cls: "glossary-collision", text: "\u26A0" });
               warn.setAttribute("aria-label", `Also matches: ${al.collidesWith.join(", ")}`);
             }
@@ -1925,12 +1927,17 @@ var require_actions = __commonJS({
         let total = 0;
         let skipped = 0;
         for (const r of results) {
-          if (await this.app.vault.read(r.file) !== r.original) {
+          let written = false;
+          await this.app.vault.process(r.file, (data) => {
+            if (data !== r.original)
+              return data;
+            written = true;
+            return r.newText;
+          });
+          if (written)
+            total += r.count;
+          else
             skipped++;
-            continue;
-          }
-          await this.app.vault.modify(r.file, r.newText);
-          total += r.count;
         }
         let msg = `Glossary Linker: ${results.length - skipped} file(s), ${total} link(s)`;
         if (skipped)
@@ -1952,11 +1959,17 @@ var require_actions = __commonJS({
         }
         this.openMaterializePreview([{ file, original: text, matches }], async (results) => {
           const r = results[0];
-          if (await this.app.vault.read(r.file) !== r.original) {
+          let written = false;
+          await this.app.vault.process(r.file, (data) => {
+            if (data !== r.original)
+              return data;
+            written = true;
+            return r.newText;
+          });
+          if (!written) {
             new Notice2("Glossary Linker: note changed since preview, nothing written");
             return;
           }
-          await this.app.vault.modify(r.file, r.newText);
           new Notice2(`Glossary Linker: ${r.count} link(s) created`);
           this.updateStatusBar();
         });
@@ -2251,40 +2264,48 @@ var require_actions = __commonJS({
       // linkAs (optional) overrides which term the occurrence is linked to — used when
       // a word matches several terms and the user picks an alternative from the menu.
       async materializeSingle(file, canonical, display, nearOffset, occurrence, linkAs) {
-        const text = await this.app.vault.read(file);
-        const matches = this.findMatches(text, this.canonicalForPath(file.path), { protect: true }).filter((m) => m.canonical === canonical && m.display === display);
-        if (!matches.length) {
+        let created = false;
+        await this.app.vault.process(file, (text) => {
+          const matches = this.findMatches(text, this.canonicalForPath(file.path), { protect: true }).filter((m) => m.canonical === canonical && m.display === display);
+          if (!matches.length)
+            return text;
+          let target = matches[0];
+          if (occurrence != null && matches[occurrence]) {
+            target = matches[occurrence];
+          } else if (nearOffset != null) {
+            target = matches.reduce((best, m) => Math.abs(m.start - nearOffset) < Math.abs(best.start - nearOffset) ? m : best, matches[0]);
+          }
+          const chosen = linkAs && linkAs !== target.canonical ? { ...target, canonical: linkAs } : target;
+          created = true;
+          return this.applyLinks(text, [chosen]).newText;
+        });
+        if (!created) {
           new Notice2("Glossary Linker: occurrence not found");
           return;
         }
-        let target = matches[0];
-        if (occurrence != null && matches[occurrence]) {
-          target = matches[occurrence];
-        } else if (nearOffset != null) {
-          target = matches.reduce((best, m) => Math.abs(m.start - nearOffset) < Math.abs(best.start - nearOffset) ? m : best, matches[0]);
-        }
-        const chosen = linkAs && linkAs !== target.canonical ? { ...target, canonical: linkAs } : target;
-        const { newText } = this.applyLinks(text, [chosen]);
-        await this.app.vault.modify(file, newText);
         new Notice2("Glossary Linker: link created");
         this.updateStatusBar();
       },
       // linkAs (optional) links the matched occurrences to a chosen alternative term
       // instead of the one findMatches picked (used to resolve an alias collision).
       async materializeTerm(file, canonical, linkAs) {
-        const text = await this.app.vault.read(file);
-        let matches = this.findMatches(text, this.canonicalForPath(file.path), { protect: true }).filter((m) => m.canonical === canonical);
-        if (!matches.length) {
+        let count = 0;
+        await this.app.vault.process(file, (text) => {
+          let matches = this.findMatches(text, this.canonicalForPath(file.path), { protect: true }).filter((m) => m.canonical === canonical);
+          if (!matches.length)
+            return text;
+          if (this.settings.linkFirstOnly)
+            matches = matches.slice(0, 1);
+          if (linkAs && linkAs !== canonical)
+            matches = matches.map((m) => ({ ...m, canonical: linkAs }));
+          count = matches.length;
+          return this.applyLinks(text, matches).newText;
+        });
+        if (!count) {
           new Notice2("Glossary Linker: no occurrences found");
           return;
         }
-        if (this.settings.linkFirstOnly)
-          matches = matches.slice(0, 1);
-        if (linkAs && linkAs !== canonical)
-          matches = matches.map((m) => ({ ...m, canonical: linkAs }));
-        const { newText } = this.applyLinks(text, matches);
-        await this.app.vault.modify(file, newText);
-        new Notice2(`Glossary Linker: ${matches.length} link(s) created`);
+        new Notice2(`Glossary Linker: ${count} link(s) created`);
         this.updateStatusBar();
       },
       async materializeTermScope(canonical, linkAs) {
@@ -2301,19 +2322,28 @@ var require_actions = __commonJS({
         }
         this.openMaterializePreview(files, (results) => this.writeScopeResults(results));
       },
-      // Keys and literals of a term's existing forms, so harvesting can skip what already matches.
-      termFormKeys(file) {
-        const forms = [file.basename, ...this.aliasesOf(file)].filter((x) => typeof x === "string" && x.trim());
-        const keys = /* @__PURE__ */ new Set();
-        const literals = /* @__PURE__ */ new Set();
-        for (const form of forms) {
-          literals.add(form.toLowerCase());
-          const words = this.tokenizeForm(form);
-          if (words.length === 1)
-            for (const k of words[0].keys)
-              keys.add(k);
+      termLiterals(file) {
+        const out = /* @__PURE__ */ new Set();
+        for (const form of [file.basename, ...this.aliasesOf(file)]) {
+          if (typeof form === "string" && form.trim())
+            out.add(form.toLowerCase());
         }
-        return { keys, literals };
+        return out;
+      },
+      // Obsidian keeps inline markup in displayText; drop it so `code`/*em* doesn't reach an alias.
+      // Returns '' (skip the link) when no letters survive.
+      normalizeDisplay(display) {
+        if (typeof display !== "string")
+          return "";
+        const clean = display.replace(/[`*_~]/g, "").replace(/\s+/g, " ").trim();
+        return /\p{L}/u.test(clean) ? clean : "";
+      },
+      partialOfMultiwordTitle(file, cand) {
+        const words = this.tokenizeForm(file.basename);
+        if (words.length < 2)
+          return false;
+        const keys = this.keysFor(cand);
+        return words.some((w) => w.keys.some((k) => keys.includes(k)));
       },
       harvestCandidates(display) {
         if (this.settings.harvestSingleWordOnly && this.tokenizeForm(display).length > 1)
@@ -2328,6 +2358,24 @@ var require_actions = __commonJS({
         const min = Math.max(1, this.settings.harvestMinLength || 1);
         return [...new Set(out)].filter((a) => a && a.length >= min);
       },
+      // Fills `add` (cand → collidesWith) and `skip` from one link's display. Shared by both harvest paths.
+      collectAliasesFromDisplay(file, display, literals, add, skip) {
+        if (this.termsMatchingText(display).includes(file.basename))
+          return;
+        for (const cand of this.harvestCandidates(display)) {
+          if (add.has(cand))
+            continue;
+          if (literals.has(cand)) {
+            skip.add(cand);
+            continue;
+          }
+          if (this.partialOfMultiwordTitle(file, cand)) {
+            skip.add(cand);
+            continue;
+          }
+          add.set(cand, this.settings.aliasCollisionWarnings ? this.termsMatchingText(cand, file.basename) : []);
+        }
+      },
       async harvestFiles(files, silent) {
         const perTerm = /* @__PURE__ */ new Map();
         for (const file of files) {
@@ -2335,7 +2383,7 @@ var require_actions = __commonJS({
           if (!cache || !cache.links)
             continue;
           for (const link of cache.links) {
-            const display = link.displayText;
+            const display = this.normalizeDisplay(link.displayText);
             if (!display)
               continue;
             const targetFile = this.app.metadataCache.getFirstLinkpathDest(link.link, file.path);
@@ -2345,30 +2393,20 @@ var require_actions = __commonJS({
               continue;
             let entry = perTerm.get(targetFile.path);
             if (!entry) {
-              entry = { file: targetFile, add: /* @__PURE__ */ new Map(), skip: /* @__PURE__ */ new Set(), info: this.termFormKeys(targetFile) };
+              entry = { file: targetFile, add: /* @__PURE__ */ new Map(), skip: /* @__PURE__ */ new Set(), literals: this.termLiterals(targetFile) };
               perTerm.set(targetFile.path, entry);
             }
-            for (const cand of this.harvestCandidates(display)) {
-              if (entry.info.literals.has(cand)) {
-                entry.skip.add(cand);
-                continue;
-              }
-              if (entry.add.has(cand))
-                continue;
-              if (this.keysFor(cand).some((k) => entry.info.keys.has(k))) {
-                entry.skip.add(cand);
-                continue;
-              }
-              const collidesWith = this.settings.aliasCollisionWarnings ? this.termsMatchingText(cand, entry.file.basename) : [];
-              entry.add.set(cand, { source: display, collidesWith });
-            }
+            this.collectAliasesFromDisplay(targetFile, display, entry.literals, entry.add, entry.skip);
           }
         }
         const additions = [];
         for (const entry of perTerm.values()) {
-          if (!entry.add.size)
+          let chosen = [...entry.add.entries()];
+          if (silent)
+            chosen = chosen.filter(([, collidesWith]) => !collidesWith.length);
+          if (!chosen.length)
             continue;
-          const aliases = [...entry.add.entries()].map(([text, meta]) => ({ text, collidesWith: meta.collidesWith }));
+          const aliases = chosen.map(([text, collidesWith]) => ({ text, collidesWith }));
           additions.push({ file: entry.file, aliases, skipped: [...entry.skip] });
         }
         if (!additions.length) {
@@ -2408,35 +2446,22 @@ var require_actions = __commonJS({
       },
       // Collect just one link's wording as an alias for its term — the per-link version of
       // harvestFiles, reusing the same candidate rules, collision check and preview/apply.
-      async harvestOneLink(targetFile, display) {
+      async harvestOneLink(targetFile, rawDisplay) {
+        const display = this.normalizeDisplay(rawDisplay);
         if (!targetFile || !this.isGlossaryFile(targetFile) || !display)
           return;
         if (display.toLowerCase() === targetFile.basename.toLowerCase()) {
           new Notice2("Glossary Linker: that wording already matches the term");
           return;
         }
-        const info = this.termFormKeys(targetFile);
         const add = /* @__PURE__ */ new Map();
         const skip = /* @__PURE__ */ new Set();
-        for (const cand of this.harvestCandidates(display)) {
-          if (info.literals.has(cand)) {
-            skip.add(cand);
-            continue;
-          }
-          if (add.has(cand))
-            continue;
-          if (this.keysFor(cand).some((k) => info.keys.has(k))) {
-            skip.add(cand);
-            continue;
-          }
-          const collidesWith = this.settings.aliasCollisionWarnings ? this.termsMatchingText(cand, targetFile.basename) : [];
-          add.set(cand, { collidesWith });
-        }
+        this.collectAliasesFromDisplay(targetFile, display, this.termLiterals(targetFile), add, skip);
         if (!add.size) {
           new Notice2("Glossary Linker: no new alias to collect");
           return;
         }
-        const aliases = [...add.entries()].map(([text, meta]) => ({ text, collidesWith: meta.collidesWith }));
+        const aliases = [...add.entries()].map(([text, collidesWith]) => ({ text, collidesWith }));
         const additions = [{ file: targetFile, aliases, skipped: [...skip] }];
         new HarvestPreviewModal(this.app, additions, (selected) => this.applyHarvest(selected)).open();
       }
