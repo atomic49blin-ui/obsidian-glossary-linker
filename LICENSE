@@ -19,13 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-This plugin bundles JavaScript ports of third-party stemming algorithms whose
-own licenses are noted in each file under languages/ and summarized in the
-README ("Licenses & credits"):
-  - languages/ru.js — Snowball Russian stemmer, BSD license.
-  - languages/en.js — Porter (1980) stemmer, free use.
-  - languages/es.js, de.js, fr.js — Apache Lucene UniNE light stemmers,
-    Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0).
