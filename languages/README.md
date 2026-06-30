@@ -6,8 +6,7 @@ and `юнитов` links to `Юнит`.
 
 Modules are plain JavaScript, bundled into `main.js` at build time; nothing is
 loaded or executed at runtime. So adding a language means contributing a module and
-rebuilding, via a pull request. (This is also what keeps the plugin compatible with
-the Obsidian community catalog, which forbids runtime code execution.)
+rebuilding, via a pull request.
 
 ## The contract
 
