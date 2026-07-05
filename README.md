@@ -2,7 +2,7 @@
   <img src="docs/images/banner.svg" alt="Glossary Linker — highlight, link, and learn glossary terms in any word form" width="760">
 </p>
 
-# <img src="docs/images/icon.svg" alt="" height="28"> Glossary Linker
+# Glossary Linker
 
 <p align="center">
   <a href="https://community.obsidian.md/plugins/glossary-linker"><img src="https://img.shields.io/badge/dynamic/json?logo=obsidian&color=7c3aed&query=%24%5B%22glossary-linker%22%5D.downloads&url=https%3A%2F%2Fraw.githubusercontent.com%2Fobsidianmd%2Fobsidian-releases%2Fmaster%2Fcommunity-plugin-stats.json&label=downloads" alt="Obsidian downloads"></a>
