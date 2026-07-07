@@ -1,7 +1,7 @@
 'use strict';
 
 const DEFAULT_SETTINGS = {
-  glossaryFolder: 'glossary',
+  glossaryFolder: '',
   termTemplate: '', // path to a template note; empty = create an empty note (as before)
   scopeMode: 'vault', // 'folders' | 'vault'
   scopeFolders: '',

@@ -10,7 +10,7 @@ var require_constants = __commonJS({
   "src/constants.js"(exports2, module2) {
     "use strict";
     var DEFAULT_SETTINGS2 = {
-      glossaryFolder: "glossary",
+      glossaryFolder: "",
       termTemplate: "",
       // path to a template note; empty = create an empty note (as before)
       scopeMode: "vault",
@@ -1006,7 +1006,7 @@ var require_en2 = __commonJS({
       "set.heading.maintenance": "Maintenance",
       // Settings — entries
       "set.glossaryFolder.name": "Glossary folder",
-      "set.glossaryFolder.desc": "Folder with one note per term (file name = the term title).",
+      "set.glossaryFolder.desc": "Folder with one note per term (file name = the term title). Leave empty to use the whole vault as the glossary.",
       "set.termTemplate.name": "Term template",
       "set.termTemplate.desc": "Note used as the body of new term notes; placeholders like {{title}} and {{date}} are filled in. Empty = blank note.",
       "set.scopeMode.name": "Link scope",
@@ -1239,7 +1239,7 @@ var require_ru2 = __commonJS({
       "set.heading.overview": "\u041E\u0431\u0437\u043E\u0440",
       "set.heading.maintenance": "\u041E\u0431\u0441\u043B\u0443\u0436\u0438\u0432\u0430\u043D\u0438\u0435",
       "set.glossaryFolder.name": "\u041F\u0430\u043F\u043A\u0430 \u0433\u043B\u043E\u0441\u0441\u0430\u0440\u0438\u044F",
-      "set.glossaryFolder.desc": "\u041F\u0430\u043F\u043A\u0430 \u0441 \u043E\u0434\u043D\u043E\u0439 \u0437\u0430\u043C\u0435\u0442\u043A\u043E\u0439 \u043D\u0430 \u0442\u0435\u0440\u043C\u0438\u043D (\u0438\u043C\u044F \u0444\u0430\u0439\u043B\u0430 = \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u0430).",
+      "set.glossaryFolder.desc": "\u041F\u0430\u043F\u043A\u0430 \u0441 \u043E\u0434\u043D\u043E\u0439 \u0437\u0430\u043C\u0435\u0442\u043A\u043E\u0439 \u043D\u0430 \u0442\u0435\u0440\u043C\u0438\u043D (\u0438\u043C\u044F \u0444\u0430\u0439\u043B\u0430 = \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u0430). \u041E\u0441\u0442\u0430\u0432\u044C \u043F\u043E\u043B\u0435 \u043F\u0443\u0441\u0442\u044B\u043C \u2014 \u0438 \u0432\u0435\u0441\u044C \u0432\u0435\u0439\u043B\u0442 \u0441\u0442\u0430\u043D\u0435\u0442 \u0433\u043B\u043E\u0441\u0441\u0430\u0440\u0438\u0435\u043C.",
       "set.termTemplate.name": "\u0428\u0430\u0431\u043B\u043E\u043D \u0442\u0435\u0440\u043C\u0438\u043D\u0430",
       "set.termTemplate.desc": "\u0417\u0430\u043C\u0435\u0442\u043A\u0430, \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u043C\u0430\u044F \u043A\u0430\u043A \u0442\u0435\u043B\u043E \u043D\u043E\u0432\u044B\u0445 \u0437\u0430\u043C\u0435\u0442\u043E\u043A \u0442\u0435\u0440\u043C\u0438\u043D\u043E\u0432; \u043F\u043B\u0435\u0439\u0441\u0445\u043E\u043B\u0434\u0435\u0440\u044B \u0432\u0440\u043E\u0434\u0435 {{title}} \u0438 {{date}} \u043F\u043E\u0434\u0441\u0442\u0430\u0432\u043B\u044F\u044E\u0442\u0441\u044F. \u041F\u0443\u0441\u0442\u043E = \u043F\u0443\u0441\u0442\u0430\u044F \u0437\u0430\u043C\u0435\u0442\u043A\u0430.",
       "set.scopeMode.name": "\u041E\u0431\u043B\u0430\u0441\u0442\u044C \u0441\u0432\u044F\u0437\u044B\u0432\u0430\u043D\u0438\u044F",
@@ -4724,6 +4724,8 @@ var GlossaryLinkerPlugin = class extends Plugin {
   }
   isGlossaryPath(path) {
     const p = this.settings.glossaryFolder.replace(/\/+$/, "");
+    if (!p)
+      return true;
     return path === `${p}.md` || path.startsWith(`${p}/`);
   }
   isGlossaryFile(file) {

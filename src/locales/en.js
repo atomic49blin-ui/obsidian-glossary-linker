@@ -106,7 +106,7 @@ module.exports = {
 
   // Settings — entries
   'set.glossaryFolder.name': 'Glossary folder',
-  'set.glossaryFolder.desc': 'Folder with one note per term (file name = the term title).',
+  'set.glossaryFolder.desc': 'Folder with one note per term (file name = the term title). Leave empty to use the whole vault as the glossary.',
   'set.termTemplate.name': 'Term template',
   'set.termTemplate.desc': 'Note used as the body of new term notes; placeholders like {{title}} and {{date}} are filled in. Empty = blank note.',
   'set.scopeMode.name': 'Link scope',

@@ -289,6 +289,7 @@ class GlossaryLinkerPlugin extends Plugin {
 
   isGlossaryPath(path) {
     const p = this.settings.glossaryFolder.replace(/\/+$/, '');
+    if (!p) return true; // empty folder setting = whole vault is the glossary
     return path === `${p}.md` || path.startsWith(`${p}/`);
   }
 
