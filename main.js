@@ -926,6 +926,7 @@ var require_en2 = __commonJS({
       "cmd.collectAllNotes": "Collect aliases from links: all notes",
       "cmd.createTerm": "Create glossary term from selection",
       "cmd.rebuildIndex": "Rebuild glossary index",
+      "cmd.addAbbreviation": "Add abbreviation\u2026",
       "ribbon.tooltip": "Glossary overview",
       "statusBar.aria": "{n} glossary term(s) on this page \u2014 click to link them",
       "noun.file": "file",
@@ -1108,6 +1109,13 @@ var require_en2 = __commonJS({
       "modal.unlink.summary": "Files: {files}, links to remove: {links}",
       "modal.choose.title": "Choose a term",
       "modal.choose.body": "This word matches more than one glossary term \u2014 pick one:",
+      "modal.abbrev.pickTerm": "Which term is this an abbreviation for?",
+      "modal.abbrev.title": 'Abbreviation for "{term}"',
+      "modal.abbrev.body": "E.g. CNS, PNS, URI. Abbreviations are not inflected automatically \u2014 type it exactly as it appears.",
+      "notice.noTerms": "No glossary terms in the vault yet.",
+      "notice.abbrevExists": '"{abbrev}" is already linked to "{term}".',
+      "notice.abbrevAdded": 'Added abbreviation "{abbrev}" \u2192 "{term}".',
+      "notice.abbrevAddedCollision": 'Added "{abbrev}" \u2192 "{term}", but it already matches: {others}.',
       "btn.apply": "Apply",
       "btn.cancel": "Cancel",
       "btn.write": "Write",
@@ -1165,6 +1173,7 @@ var require_ru2 = __commonJS({
       "cmd.collectAllNotes": "\u0421\u043E\u0431\u0440\u0430\u0442\u044C \u043F\u0441\u0435\u0432\u0434\u043E\u043D\u0438\u043C\u044B \u0438\u0437 \u0441\u0441\u044B\u043B\u043E\u043A: \u0432\u0441\u0435 \u0437\u0430\u043C\u0435\u0442\u043A\u0438",
       "cmd.createTerm": "\u0421\u043E\u0437\u0434\u0430\u0442\u044C \u0442\u0435\u0440\u043C\u0438\u043D \u0433\u043B\u043E\u0441\u0441\u0430\u0440\u0438\u044F \u0438\u0437 \u0432\u044B\u0434\u0435\u043B\u0435\u043D\u0438\u044F",
       "cmd.rebuildIndex": "\u041F\u0435\u0440\u0435\u0441\u0442\u0440\u043E\u0438\u0442\u044C \u0438\u043D\u0434\u0435\u043A\u0441 \u0433\u043B\u043E\u0441\u0441\u0430\u0440\u0438\u044F",
+      "cmd.addAbbreviation": "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0441\u043E\u043A\u0440\u0430\u0449\u0435\u043D\u0438\u0435\u2026",
       "ribbon.tooltip": "\u041E\u0431\u0437\u043E\u0440 \u0433\u043B\u043E\u0441\u0441\u0430\u0440\u0438\u044F",
       "statusBar.aria": "\u0422\u0435\u0440\u043C\u0438\u043D\u043E\u0432 \u0433\u043B\u043E\u0441\u0441\u0430\u0440\u0438\u044F \u043D\u0430 \u044D\u0442\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0435: {n} \u2014 \u043D\u0430\u0436\u043C\u0438\u0442\u0435, \u0447\u0442\u043E\u0431\u044B \u0441\u0432\u044F\u0437\u0430\u0442\u044C",
       "noun.file": "\u0444\u0430\u0439\u043B",
@@ -1340,6 +1349,13 @@ var require_ru2 = __commonJS({
       "modal.unlink.summary": "\u0424\u0430\u0439\u043B\u043E\u0432: {files}, \u0441\u0441\u044B\u043B\u043E\u043A \u043A \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044E: {links}",
       "modal.choose.title": "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0442\u0435\u0440\u043C\u0438\u043D",
       "modal.choose.body": "\u042D\u0442\u043E \u0441\u043B\u043E\u0432\u043E \u0441\u043E\u0432\u043F\u0430\u0434\u0430\u0435\u0442 \u0441 \u043D\u0435\u0441\u043A\u043E\u043B\u044C\u043A\u0438\u043C\u0438 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043C\u0438 \u2014 \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u043E\u0434\u0438\u043D:",
+      "modal.abbrev.pickTerm": "\u041A \u043A\u0430\u043A\u043E\u043C\u0443 \u0442\u0435\u0440\u043C\u0438\u043D\u0443 \u043F\u0440\u0438\u0432\u044F\u0437\u0430\u0442\u044C \u0441\u043E\u043A\u0440\u0430\u0449\u0435\u043D\u0438\u0435?",
+      "modal.abbrev.title": "\u0421\u043E\u043A\u0440\u0430\u0449\u0435\u043D\u0438\u0435 \u0434\u043B\u044F \xAB{term}\xBB",
+      "modal.abbrev.body": "\u041D\u0430\u043F\u0440\u0438\u043C\u0435\u0440: \u0426\u041D\u0421, \u0412\u041D\u0421, \u041E\u0420\u0412\u0418. \u0421\u043E\u043A\u0440\u0430\u0449\u0435\u043D\u0438\u044F \u043D\u0435 \u0441\u043A\u043B\u043E\u043D\u044F\u044E\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438 \u2014 \u0432\u0432\u043E\u0434\u0438 \u043A\u0430\u043A \u043E\u043D\u043E \u043F\u0438\u0448\u0435\u0442\u0441\u044F.",
+      "notice.noTerms": "\u0412 \u0432\u0435\u0439\u043B\u0442\u0435 \u043F\u043E\u043A\u0430 \u043D\u0435\u0442 \u043D\u0438 \u043E\u0434\u043D\u043E\u0433\u043E \u0442\u0435\u0440\u043C\u0438\u043D\u0430.",
+      "notice.abbrevExists": "\xAB{abbrev}\xBB \u0443\u0436\u0435 \u043F\u0440\u0438\u0432\u044F\u0437\u0430\u043D\u043E \u043A \xAB{term}\xBB.",
+      "notice.abbrevAdded": "\u0414\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u043E \u0441\u043E\u043A\u0440\u0430\u0449\u0435\u043D\u0438\u0435 \xAB{abbrev}\xBB \u2192 \xAB{term}\xBB.",
+      "notice.abbrevAddedCollision": "\u0414\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u043E \xAB{abbrev}\xBB \u2192 \xAB{term}\xBB, \u043D\u043E \u043E\u043D\u043E \u0443\u0436\u0435 \u0441\u043E\u0432\u043F\u0430\u0434\u0430\u0435\u0442 \u0441: {others}.",
       "btn.apply": "\u041F\u0440\u0438\u043C\u0435\u043D\u0438\u0442\u044C",
       "btn.cancel": "\u041E\u0442\u043C\u0435\u043D\u0430",
       "btn.write": "\u0417\u0430\u043F\u0438\u0441\u0430\u0442\u044C",
@@ -3176,7 +3192,7 @@ var require_highlight = __commonJS({
 var require_modals = __commonJS({
   "src/modals.js"(exports2, module2) {
     "use strict";
-    var { Modal } = require("obsidian");
+    var { Modal, FuzzySuggestModal } = require("obsidian");
     var { t: t2 } = require_i18n();
     var { inTableCell: inTableCell2 } = require_constants();
     var SKIP = " skip";
@@ -3384,7 +3400,63 @@ var require_modals = __commonJS({
         this.contentEl.empty();
       }
     };
-    module2.exports = { MaterializePreviewModal, HarvestPreviewModal, ChooseTermModal, UnlinkPreviewModal };
+    var TermPickerModal = class extends FuzzySuggestModal {
+      constructor(app, terms, onChoose) {
+        super(app);
+        this.terms = terms;
+        this.onChoose = onChoose;
+        this.setPlaceholder(t2("modal.abbrev.pickTerm"));
+      }
+      getItems() {
+        return this.terms;
+      }
+      getItemText(item) {
+        return item.canonical;
+      }
+      onChooseItem(item) {
+        this.onChoose(item);
+      }
+    };
+    var AbbreviationTextModal = class extends Modal {
+      constructor(app, termName, onSubmit) {
+        super(app);
+        this.termName = termName;
+        this.onSubmit = onSubmit;
+      }
+      onOpen() {
+        const { contentEl } = this;
+        contentEl.createEl("h3", { text: t2("modal.abbrev.title", { term: this.termName }) });
+        contentEl.createEl("p", { cls: "glossary-section-desc", text: t2("modal.abbrev.body") });
+        const input = contentEl.createEl("input", { type: "text", cls: "glossary-abbrev-input" });
+        input.style.width = "100%";
+        const submit = () => {
+          const v = input.value.trim();
+          if (v) {
+            this.onSubmit(v);
+            this.close();
+          }
+        };
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter")
+            submit();
+        });
+        const buttons = contentEl.createDiv({ cls: "glossary-preview-buttons" });
+        buttons.createEl("button", { text: t2("btn.write"), cls: "mod-cta" }).onclick = submit;
+        buttons.createEl("button", { text: t2("btn.cancel") }).onclick = () => this.close();
+        input.focus();
+      }
+      onClose() {
+        this.contentEl.empty();
+      }
+    };
+    module2.exports = {
+      MaterializePreviewModal,
+      HarvestPreviewModal,
+      ChooseTermModal,
+      UnlinkPreviewModal,
+      TermPickerModal,
+      AbbreviationTextModal
+    };
   }
 });
 
@@ -3394,7 +3466,14 @@ var require_actions = __commonJS({
     "use strict";
     var { Menu, Notice: Notice2, TFile: TFile2, moment } = require("obsidian");
     var { splitLines: splitLines2 } = require_constants();
-    var { MaterializePreviewModal, HarvestPreviewModal, ChooseTermModal, UnlinkPreviewModal } = require_modals();
+    var {
+      MaterializePreviewModal,
+      HarvestPreviewModal,
+      ChooseTermModal,
+      UnlinkPreviewModal,
+      TermPickerModal,
+      AbbreviationTextModal
+    } = require_modals();
     var { t: t2, plural: plural2 } = require_i18n();
     module2.exports = {
       // Ambiguous matches keep their `alts` so the preview can let the user pick a term.
@@ -3956,6 +4035,44 @@ var require_actions = __commonJS({
         const aliases = [...add.entries()].map(([text, collidesWith]) => ({ text, collidesWith }));
         const additions = [{ file: targetFile, aliases, skipped: [...skip] }];
         new HarvestPreviewModal(this.app, additions, (selected) => this.applyHarvest(selected)).open();
+      },
+      // Manual "Add abbreviation" flow: pick a term, type the short form (e.g. "ЦНС"),
+      // store it as a plain alias. Unlike the stemmer, abbreviations aren't inflected
+      // forms of the term — they only ever match verbatim, so they must be listed.
+      addAbbreviation() {
+        if (!this.terms || !this.terms.length) {
+          new Notice2(t2("notice.noTerms"));
+          return;
+        }
+        new TermPickerModal(this.app, this.terms, (term) => {
+          new AbbreviationTextModal(this.app, term.canonical, async (abbrev) => {
+            const file = this.app.vault.getAbstractFileByPath(term.path);
+            if (!(file instanceof TFile2)) {
+              new Notice2(t2("notice.noTerms"));
+              return;
+            }
+            const already = (this.aliasesOf(file) || []).some((a) => a.toLowerCase() === abbrev.toLowerCase());
+            if (already || abbrev.toLowerCase() === term.canonical.toLowerCase()) {
+              new Notice2(t2("notice.abbrevExists", { abbrev, term: term.canonical }));
+              return;
+            }
+            const collidesWith = [...this.termsMatchingText(abbrev)].filter((c) => c !== term.canonical);
+            await this.app.fileManager.processFrontMatter(file, (fm) => {
+              let list = fm.aliases;
+              if (!Array.isArray(list))
+                list = typeof list === "string" && list.trim() ? [list] : [];
+              list.push(abbrev);
+              fm.aliases = list;
+            });
+            this.rebuildIndex();
+            this.updateStatusBar();
+            if (collidesWith.length) {
+              new Notice2(t2("notice.abbrevAddedCollision", { abbrev, term: term.canonical, others: collidesWith.join(", ") }));
+            } else {
+              new Notice2(t2("notice.abbrevAdded", { abbrev, term: term.canonical }));
+            }
+          }).open();
+        }).open();
       }
     };
   }
@@ -4632,6 +4749,11 @@ var GlossaryLinkerPlugin = class extends Plugin {
         this.rebuildIndex();
         new Notice(t("notice.indexRebuilt"));
       }
+    });
+    this.addCommand({
+      id: "add-abbreviation",
+      name: t("cmd.addAbbreviation"),
+      callback: () => this.addAbbreviation()
     });
     this.addSettingTab(new GlossaryLinkerSettingTab(this.app, this));
   }

@@ -203,6 +203,11 @@ class GlossaryLinkerPlugin extends Plugin {
       name: t('cmd.rebuildIndex'),
       callback: () => { this.rebuildIndex(); new Notice(t('notice.indexRebuilt')); },
     });
+    this.addCommand({
+      id: 'add-abbreviation',
+      name: t('cmd.addAbbreviation'),
+      callback: () => this.addAbbreviation(),
+    });
 
     this.addSettingTab(new GlossaryLinkerSettingTab(this.app, this));
   }
