@@ -26,6 +26,7 @@ module.exports = {
 
   'menu.createTermLink': 'Glossary: создать термин и связать',
   'menu.createTerm': 'Glossary: создать термин',
+  'menu.addAbbreviation': 'Glossary: сделать сокращением термина…',
   'menu.unlinkThisTerm': 'Glossary: убрать ссылку на этот термин',
   'menu.collectThisAlias': 'Glossary: собрать этот псевдоним',
   'menu.collectFromNote': 'Glossary: собрать псевдонимы из ссылок (эта заметка)',
@@ -174,6 +175,8 @@ module.exports = {
   'set.menuOpen.desc': 'Показывать в контекстном меню термина «Открыть заметку глоссария» / «Открыть в новой вкладке».',
   'set.menuCreateTerm.name': 'Пункты «Создать термин из выделения»',
   'set.menuCreateTerm.desc': 'Показывать в контекстном меню выделенного текста действия «Glossary: создать термин…».',
+  'set.menuAddAbbreviation.name': 'Пункт «Сделать сокращением термина»',
+  'set.menuAddAbbreviation.desc': 'Показывать в контекстном меню выделенного текста пункт, который привязывает выделение как сокращение к выбранному термину.',
   'set.menuUnlink.name': 'Пункт «Убрать ссылку на термин»',
   'set.menuUnlink.desc': 'Показывать в контекстном меню ссылки «Glossary: убрать ссылку на этот термин».',
   'set.showRibbonIcon.name': 'Значок на панели',

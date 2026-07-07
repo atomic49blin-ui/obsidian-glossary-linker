@@ -31,6 +31,7 @@ module.exports = {
   // Native context-menu items (brand prefix "Glossary:" kept verbatim)
   'menu.createTermLink': 'Glossary: create term & link',
   'menu.createTerm': 'Glossary: create term',
+  'menu.addAbbreviation': 'Glossary: make this an abbreviation for…',
   'menu.unlinkThisTerm': 'Glossary: unlink this term',
   'menu.collectThisAlias': 'Glossary: collect this alias',
   'menu.collectFromNote': 'Glossary: collect aliases from links (this note)',
@@ -184,6 +185,8 @@ module.exports = {
   'set.menuOpen.desc': 'Show "Open glossary note" / "Open in new tab" when right-clicking a highlighted term.',
   'set.menuCreateTerm.name': '"Create term from selection" items',
   'set.menuCreateTerm.desc': 'Show the "Glossary: create term…" actions when right-clicking a plain text selection.',
+  'set.menuAddAbbreviation.name': '"Make this an abbreviation" item',
+  'set.menuAddAbbreviation.desc': 'Show a context-menu item on a plain text selection that attaches it as an abbreviation to a term you pick.',
   'set.menuUnlink.name': '"Unlink term" item',
   'set.menuUnlink.desc': 'Show "Glossary: unlink this term" when right-clicking an existing glossary link.',
   'set.showRibbonIcon.name': 'Ribbon icon',

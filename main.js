@@ -65,6 +65,7 @@ var require_constants = __commonJS({
       menuCollect: true,
       menuOpen: true,
       menuCreateTerm: true,
+      menuAddAbbreviation: true,
       menuExclude: true,
       menuUnlink: true
     };
@@ -936,6 +937,7 @@ var require_en2 = __commonJS({
       // Native context-menu items (brand prefix "Glossary:" kept verbatim)
       "menu.createTermLink": "Glossary: create term & link",
       "menu.createTerm": "Glossary: create term",
+      "menu.addAbbreviation": "Glossary: make this an abbreviation for\u2026",
       "menu.unlinkThisTerm": "Glossary: unlink this term",
       "menu.collectThisAlias": "Glossary: collect this alias",
       "menu.collectFromNote": "Glossary: collect aliases from links (this note)",
@@ -1084,6 +1086,8 @@ var require_en2 = __commonJS({
       "set.menuOpen.desc": 'Show "Open glossary note" / "Open in new tab" when right-clicking a highlighted term.',
       "set.menuCreateTerm.name": '"Create term from selection" items',
       "set.menuCreateTerm.desc": 'Show the "Glossary: create term\u2026" actions when right-clicking a plain text selection.',
+      "set.menuAddAbbreviation.name": '"Make this an abbreviation" item',
+      "set.menuAddAbbreviation.desc": "Show a context-menu item on a plain text selection that attaches it as an abbreviation to a term you pick.",
       "set.menuUnlink.name": '"Unlink term" item',
       "set.menuUnlink.desc": 'Show "Glossary: unlink this term" when right-clicking an existing glossary link.',
       "set.showRibbonIcon.name": "Ribbon icon",
@@ -1182,6 +1186,7 @@ var require_ru2 = __commonJS({
       "scope.all": "\u0432\u0441\u0435",
       "menu.createTermLink": "Glossary: \u0441\u043E\u0437\u0434\u0430\u0442\u044C \u0442\u0435\u0440\u043C\u0438\u043D \u0438 \u0441\u0432\u044F\u0437\u0430\u0442\u044C",
       "menu.createTerm": "Glossary: \u0441\u043E\u0437\u0434\u0430\u0442\u044C \u0442\u0435\u0440\u043C\u0438\u043D",
+      "menu.addAbbreviation": "Glossary: \u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0441\u043E\u043A\u0440\u0430\u0449\u0435\u043D\u0438\u0435\u043C \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u2026",
       "menu.unlinkThisTerm": "Glossary: \u0443\u0431\u0440\u0430\u0442\u044C \u0441\u0441\u044B\u043B\u043A\u0443 \u043D\u0430 \u044D\u0442\u043E\u0442 \u0442\u0435\u0440\u043C\u0438\u043D",
       "menu.collectThisAlias": "Glossary: \u0441\u043E\u0431\u0440\u0430\u0442\u044C \u044D\u0442\u043E\u0442 \u043F\u0441\u0435\u0432\u0434\u043E\u043D\u0438\u043C",
       "menu.collectFromNote": "Glossary: \u0441\u043E\u0431\u0440\u0430\u0442\u044C \u043F\u0441\u0435\u0432\u0434\u043E\u043D\u0438\u043C\u044B \u0438\u0437 \u0441\u0441\u044B\u043B\u043E\u043A (\u044D\u0442\u0430 \u0437\u0430\u043C\u0435\u0442\u043A\u0430)",
@@ -1325,6 +1330,8 @@ var require_ru2 = __commonJS({
       "set.menuOpen.desc": "\u041F\u043E\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u043D\u043E\u043C \u043C\u0435\u043D\u044E \u0442\u0435\u0440\u043C\u0438\u043D\u0430 \xAB\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0437\u0430\u043C\u0435\u0442\u043A\u0443 \u0433\u043B\u043E\u0441\u0441\u0430\u0440\u0438\u044F\xBB / \xAB\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0432 \u043D\u043E\u0432\u043E\u0439 \u0432\u043A\u043B\u0430\u0434\u043A\u0435\xBB.",
       "set.menuCreateTerm.name": "\u041F\u0443\u043D\u043A\u0442\u044B \xAB\u0421\u043E\u0437\u0434\u0430\u0442\u044C \u0442\u0435\u0440\u043C\u0438\u043D \u0438\u0437 \u0432\u044B\u0434\u0435\u043B\u0435\u043D\u0438\u044F\xBB",
       "set.menuCreateTerm.desc": "\u041F\u043E\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u043D\u043E\u043C \u043C\u0435\u043D\u044E \u0432\u044B\u0434\u0435\u043B\u0435\u043D\u043D\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044F \xABGlossary: \u0441\u043E\u0437\u0434\u0430\u0442\u044C \u0442\u0435\u0440\u043C\u0438\u043D\u2026\xBB.",
+      "set.menuAddAbbreviation.name": "\u041F\u0443\u043D\u043A\u0442 \xAB\u0421\u0434\u0435\u043B\u0430\u0442\u044C \u0441\u043E\u043A\u0440\u0430\u0449\u0435\u043D\u0438\u0435\u043C \u0442\u0435\u0440\u043C\u0438\u043D\u0430\xBB",
+      "set.menuAddAbbreviation.desc": "\u041F\u043E\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u043D\u043E\u043C \u043C\u0435\u043D\u044E \u0432\u044B\u0434\u0435\u043B\u0435\u043D\u043D\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430 \u043F\u0443\u043D\u043A\u0442, \u043A\u043E\u0442\u043E\u0440\u044B\u0439 \u043F\u0440\u0438\u0432\u044F\u0437\u044B\u0432\u0430\u0435\u0442 \u0432\u044B\u0434\u0435\u043B\u0435\u043D\u0438\u0435 \u043A\u0430\u043A \u0441\u043E\u043A\u0440\u0430\u0449\u0435\u043D\u0438\u0435 \u043A \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u043C\u0443 \u0442\u0435\u0440\u043C\u0438\u043D\u0443.",
       "set.menuUnlink.name": "\u041F\u0443\u043D\u043A\u0442 \xAB\u0423\u0431\u0440\u0430\u0442\u044C \u0441\u0441\u044B\u043B\u043A\u0443 \u043D\u0430 \u0442\u0435\u0440\u043C\u0438\u043D\xBB",
       "set.menuUnlink.desc": "\u041F\u043E\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u043D\u043E\u043C \u043C\u0435\u043D\u044E \u0441\u0441\u044B\u043B\u043A\u0438 \xABGlossary: \u0443\u0431\u0440\u0430\u0442\u044C \u0441\u0441\u044B\u043B\u043A\u0443 \u043D\u0430 \u044D\u0442\u043E\u0442 \u0442\u0435\u0440\u043C\u0438\u043D\xBB.",
       "set.showRibbonIcon.name": "\u0417\u043D\u0430\u0447\u043E\u043A \u043D\u0430 \u043F\u0430\u043D\u0435\u043B\u0438",
@@ -2590,6 +2597,10 @@ var require_settings_tab = __commonJS({
         }));
         new Setting(containerEl).setName(t2("set.menuCreateTerm.name")).setDesc(t2("set.menuCreateTerm.desc")).addToggle((c) => c.setValue(s.menuCreateTerm).onChange(async (v) => {
           s.menuCreateTerm = v;
+          await save(false);
+        }));
+        new Setting(containerEl).setName(t2("set.menuAddAbbreviation.name")).setDesc(t2("set.menuAddAbbreviation.desc")).addToggle((c) => c.setValue(s.menuAddAbbreviation).onChange(async (v) => {
+          s.menuAddAbbreviation = v;
           await save(false);
         }));
         new Setting(containerEl).setName(t2("set.menuUnlink.name")).setDesc(t2("set.menuUnlink.desc")).addToggle((c) => c.setValue(s.menuUnlink).onChange(async (v) => {
@@ -4036,43 +4047,54 @@ var require_actions = __commonJS({
         const additions = [{ file: targetFile, aliases, skipped: [...skip] }];
         new HarvestPreviewModal(this.app, additions, (selected) => this.applyHarvest(selected)).open();
       },
-      // Manual "Add abbreviation" flow: pick a term, type the short form (e.g. "ЦНС"),
-      // store it as a plain alias. Unlike the stemmer, abbreviations aren't inflected
-      // forms of the term — they only ever match verbatim, so they must be listed.
+      // Shared write: attach `abbrev` as a plain alias on `term` (from this.terms).
+      // Unlike the stemmer, abbreviations aren't inflected forms of the term — they
+      // only ever match verbatim, so they must be listed explicitly.
+      async writeAbbreviation(term, abbrev) {
+        const file = this.app.vault.getAbstractFileByPath(term.path);
+        if (!(file instanceof TFile2)) {
+          new Notice2(t2("notice.noTerms"));
+          return;
+        }
+        const already = (this.aliasesOf(file) || []).some((a) => a.toLowerCase() === abbrev.toLowerCase());
+        if (already || abbrev.toLowerCase() === term.canonical.toLowerCase()) {
+          new Notice2(t2("notice.abbrevExists", { abbrev, term: term.canonical }));
+          return;
+        }
+        const collidesWith = [...this.termsMatchingText(abbrev)].filter((c) => c !== term.canonical);
+        await this.app.fileManager.processFrontMatter(file, (fm) => {
+          let list = fm.aliases;
+          if (!Array.isArray(list))
+            list = typeof list === "string" && list.trim() ? [list] : [];
+          list.push(abbrev);
+          fm.aliases = list;
+        });
+        this.rebuildIndex();
+        this.updateStatusBar();
+        if (collidesWith.length) {
+          new Notice2(t2("notice.abbrevAddedCollision", { abbrev, term: term.canonical, others: collidesWith.join(", ") }));
+        } else {
+          new Notice2(t2("notice.abbrevAdded", { abbrev, term: term.canonical }));
+        }
+      },
+      // Command Palette flow: pick a term, then type the abbreviation.
       addAbbreviation() {
         if (!this.terms || !this.terms.length) {
           new Notice2(t2("notice.noTerms"));
           return;
         }
         new TermPickerModal(this.app, this.terms, (term) => {
-          new AbbreviationTextModal(this.app, term.canonical, async (abbrev) => {
-            const file = this.app.vault.getAbstractFileByPath(term.path);
-            if (!(file instanceof TFile2)) {
-              new Notice2(t2("notice.noTerms"));
-              return;
-            }
-            const already = (this.aliasesOf(file) || []).some((a) => a.toLowerCase() === abbrev.toLowerCase());
-            if (already || abbrev.toLowerCase() === term.canonical.toLowerCase()) {
-              new Notice2(t2("notice.abbrevExists", { abbrev, term: term.canonical }));
-              return;
-            }
-            const collidesWith = [...this.termsMatchingText(abbrev)].filter((c) => c !== term.canonical);
-            await this.app.fileManager.processFrontMatter(file, (fm) => {
-              let list = fm.aliases;
-              if (!Array.isArray(list))
-                list = typeof list === "string" && list.trim() ? [list] : [];
-              list.push(abbrev);
-              fm.aliases = list;
-            });
-            this.rebuildIndex();
-            this.updateStatusBar();
-            if (collidesWith.length) {
-              new Notice2(t2("notice.abbrevAddedCollision", { abbrev, term: term.canonical, others: collidesWith.join(", ") }));
-            } else {
-              new Notice2(t2("notice.abbrevAdded", { abbrev, term: term.canonical }));
-            }
-          }).open();
+          new AbbreviationTextModal(this.app, term.canonical, (abbrev) => this.writeAbbreviation(term, abbrev)).open();
         }).open();
+      },
+      // Editor context-menu flow: the selection already IS the abbreviation, so only
+      // the term still needs picking.
+      addAbbreviationFromSelection(abbrev) {
+        if (!this.terms || !this.terms.length) {
+          new Notice2(t2("notice.noTerms"));
+          return;
+        }
+        new TermPickerModal(this.app, this.terms, (term) => this.writeAbbreviation(term, abbrev)).open();
       }
     };
   }
@@ -4639,6 +4661,9 @@ var GlossaryLinkerPlugin = class extends Plugin {
       if (this.settings.menuCreateTerm && hasSel && !link) {
         menu.addItem((i) => i.setTitle(t("menu.createTermLink")).setIcon("plus-circle").onClick(() => this.createTermFromSelection(editor, true)));
         menu.addItem((i) => i.setTitle(t("menu.createTerm")).setIcon("file-plus").onClick(() => this.createTermFromSelection(editor, false)));
+      }
+      if (this.settings.menuAddAbbreviation && hasSel && !link) {
+        menu.addItem((i) => i.setTitle(t("menu.addAbbreviation")).setIcon("text-cursor-input").onClick(() => this.addAbbreviationFromSelection(sel)));
       }
       if (this.settings.menuExclude && hasSel && !link) {
         this.addExclusionMenuItem(menu, "excludeWords", sel, "Glossary: ");

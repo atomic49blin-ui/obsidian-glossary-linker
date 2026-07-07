@@ -87,6 +87,10 @@ class GlossaryLinkerPlugin extends Plugin {
         menu.addItem((i) => i.setTitle(t('menu.createTerm')).setIcon('file-plus')
           .onClick(() => this.createTermFromSelection(editor, false)));
       }
+      if (this.settings.menuAddAbbreviation && hasSel && !link) {
+        menu.addItem((i) => i.setTitle(t('menu.addAbbreviation')).setIcon('text-cursor-input')
+          .onClick(() => this.addAbbreviationFromSelection(sel)));
+      }
       if (this.settings.menuExclude && hasSel && !link) {
         this.addExclusionMenuItem(menu, 'excludeWords', sel, 'Glossary: ');
       }
