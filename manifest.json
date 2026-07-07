@@ -4,7 +4,7 @@
   "version": "1.2.2-vault1",
   "minAppVersion": "1.4.0",
   "description": "Fork of Glossary Linker: empty glossary folder = whole vault is the glossary. Highlights glossary terms in any word form, turns them into real links, and learns new aliases from links you already made.",
-  "author": "atomic49blin-ui (fork of max-fluff)",
-  "authorUrl": "https://github.com/atomic49blin-ui/obsidian-glossary-linker",
+  "author": "atomic-pancake-49 (fork of max-fluff)",
+  "authorUrl": "https://github.com/atomic-pancake-49/obsidian-glossary-linker",
   "isDesktopOnly": false
 }
