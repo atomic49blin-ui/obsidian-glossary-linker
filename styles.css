@@ -308,3 +308,7 @@ settings:
   font-size: var(--font-ui-small);
   padding: 6px 0;
 }
+
+.glossary-abbrev-input {
+  width: 100%;
+}

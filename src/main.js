@@ -32,6 +32,11 @@ class GlossaryLinkerPlugin extends Plugin {
     this.excludeWordKeys = new Set();
     this.keysCache = new Map();
     this.terms = [];
+    // path -> JSON(canonical+aliases) as of the last rebuild. Lets the 'changed'
+    // handler tell "this note's term identity changed" from "its body changed" —
+    // in whole-vault mode every note is a glossary file, so without this every
+    // keystroke pause anywhere would trigger a full rebuildIndex().
+    this.aliasFingerprints = new Map();
     this._indexListeners = new Set(); // API onChange subscribers; needed before the first rebuild
 
     await this.loadLanguages();
@@ -50,7 +55,14 @@ class GlossaryLinkerPlugin extends Plugin {
     this.app.workspace.onLayoutReady(() => { this.rebuildIndex(); this.updateStatusBar(); });
 
     this.registerEvent(this.app.metadataCache.on('changed', (file) => {
-      if (this.isGlossaryPath(file.path)) this.scheduleRebuild();
+      if (!this.isGlossaryPath(file.path)) return;
+      // Only the title (unchanged by an edit) and the aliases frontmatter define a
+      // term, so a rebuild is only warranted when the aliases actually differ from
+      // what's already indexed — not on every edit to the note's body.
+      const next = JSON.stringify(this.aliasesOf(file));
+      if (this.aliasFingerprints.get(file.path) === next) return;
+      this.aliasFingerprints.set(file.path, next);
+      this.scheduleRebuild();
     }));
     // 'changed' fires on edits but not on add/remove/rename — a new or renamed term
     // note (the title is the term) must also rebuild the index.
@@ -58,10 +70,14 @@ class GlossaryLinkerPlugin extends Plugin {
       if (this.isGlossaryPath(file.path)) this.scheduleRebuild();
     }));
     this.registerEvent(this.app.vault.on('delete', (file) => {
-      if (this.isGlossaryPath(file.path)) this.scheduleRebuild();
+      if (!this.isGlossaryPath(file.path)) return;
+      this.aliasFingerprints.delete(file.path);
+      this.scheduleRebuild();
     }));
     this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
-      if (this.isGlossaryPath(file.path) || this.isGlossaryPath(oldPath)) this.scheduleRebuild();
+      if (!this.isGlossaryPath(file.path) && !this.isGlossaryPath(oldPath)) return;
+      this.aliasFingerprints.delete(oldPath);
+      this.scheduleRebuild();
     }));
 
     this.harvestOnSaveDebounced = debounce((file) => this.harvestFiles([file], this.settings.harvestOnSave !== 'preview'), 1500, true);
@@ -86,6 +102,10 @@ class GlossaryLinkerPlugin extends Plugin {
           .onClick(() => this.createTermFromSelection(editor, true)));
         menu.addItem((i) => i.setTitle(t('menu.createTerm')).setIcon('file-plus')
           .onClick(() => this.createTermFromSelection(editor, false)));
+      }
+      if (this.settings.menuAddAbbreviation && hasSel && !link) {
+        menu.addItem((i) => i.setTitle(t('menu.addAbbreviation')).setIcon('text-cursor-input')
+          .onClick(() => this.addAbbreviationFromSelection(sel)));
       }
       if (this.settings.menuExclude && hasSel && !link) {
         this.addExclusionMenuItem(menu, 'excludeWords', sel, 'Glossary: ');
@@ -203,6 +223,11 @@ class GlossaryLinkerPlugin extends Plugin {
       name: t('cmd.rebuildIndex'),
       callback: () => { this.rebuildIndex(); new Notice(t('notice.indexRebuilt')); },
     });
+    this.addCommand({
+      id: 'add-abbreviation',
+      name: t('cmd.addAbbreviation'),
+      callback: () => this.addAbbreviation(),
+    });
 
     this.addSettingTab(new GlossaryLinkerSettingTab(this.app, this));
   }
@@ -289,6 +314,7 @@ class GlossaryLinkerPlugin extends Plugin {
 
   isGlossaryPath(path) {
     const p = this.settings.glossaryFolder.replace(/\/+$/, '');
+    if (!p) return true; // empty folder setting = whole vault is the glossary
     return path === `${p}.md` || path.startsWith(`${p}/`);
   }
 

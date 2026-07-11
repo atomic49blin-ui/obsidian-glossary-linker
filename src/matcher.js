@@ -56,6 +56,9 @@ module.exports = {
     for (const file of files) {
       const canonical = file.basename;
       const aliases = this.aliasesOf(file);
+      // Keep the 'changed'-handler fingerprint in sync with what this rebuild
+      // actually saw, so the next single-file edit compares against current data.
+      this.aliasFingerprints.set(file.path, JSON.stringify(aliases));
       // An excluded title or alias drops the whole entry (vs. excludeWords, one word).
       if ([canonical, ...aliases].some((f) => excludeTerms.has(f.toLowerCase()))) continue;
 
