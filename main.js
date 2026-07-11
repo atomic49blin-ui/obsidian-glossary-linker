@@ -10,7 +10,8 @@ var require_constants = __commonJS({
   "src/constants.js"(exports2, module2) {
     "use strict";
     var DEFAULT_SETTINGS2 = {
-      glossaryFolder: "glossary",
+      glossaryFolder: "",
+      // personal-fork default: empty = whole vault is the glossary
       termTemplate: "",
       // path to a template note; empty = create an empty note (as before)
       scopeMode: "vault",

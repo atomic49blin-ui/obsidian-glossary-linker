@@ -1,10 +1,10 @@
 {
-  "id": "glossary-linker",
-  "name": "Glossary Linker",
-  "version": "1.3.0",
+  "id": "glossary-linker-vault-fork",
+  "name": "Glossary Linker (whole-vault fork)",
+  "version": "1.3.0-vault1",
   "minAppVersion": "1.4.0",
-  "description": "Highlights glossary terms in any word form, turns them into real links, and learns new aliases from links you already made.",
-  "author": "max-fluff",
-  "authorUrl": "https://github.com/max-fluff",
+  "description": "Fork of Glossary Linker with whole-vault mode defaulted on. Highlights glossary terms in any word form, turns them into real links, and learns new aliases from links you already made.",
+  "author": "atomic-pancake-49 (fork of max-fluff)",
+  "authorUrl": "https://github.com/atomic-pancake-49/obsidian-glossary-linker",
   "isDesktopOnly": false
 }
