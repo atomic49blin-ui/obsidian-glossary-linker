@@ -1120,6 +1120,7 @@ var require_en2 = __commonJS({
       "notice.abbrevExists": '"{abbrev}" is already linked to "{term}".',
       "notice.abbrevAdded": 'Added abbreviation "{abbrev}" \u2192 "{term}".',
       "notice.abbrevAddedCollision": 'Added "{abbrev}" \u2192 "{term}", but it already matches: {others}.',
+      "notice.termFileMissing": 'Term note for "{term}" not found \u2014 it may have been moved or deleted.',
       "btn.apply": "Apply",
       "btn.cancel": "Cancel",
       "btn.write": "Write",
@@ -1253,7 +1254,7 @@ var require_ru2 = __commonJS({
       "set.heading.overview": "\u041E\u0431\u0437\u043E\u0440",
       "set.heading.maintenance": "\u041E\u0431\u0441\u043B\u0443\u0436\u0438\u0432\u0430\u043D\u0438\u0435",
       "set.glossaryFolder.name": "\u041F\u0430\u043F\u043A\u0430 \u0433\u043B\u043E\u0441\u0441\u0430\u0440\u0438\u044F",
-      "set.glossaryFolder.desc": "\u041F\u0430\u043F\u043A\u0430 \u0441 \u043E\u0434\u043D\u043E\u0439 \u0437\u0430\u043C\u0435\u0442\u043A\u043E\u0439 \u043D\u0430 \u0442\u0435\u0440\u043C\u0438\u043D (\u0438\u043C\u044F \u0444\u0430\u0439\u043B\u0430 = \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u0430). \u041E\u0441\u0442\u0430\u0432\u044C \u043F\u043E\u043B\u0435 \u043F\u0443\u0441\u0442\u044B\u043C \u2014 \u0438 \u0432\u0435\u0441\u044C \u0432\u0435\u0439\u043B\u0442 \u0441\u0442\u0430\u043D\u0435\u0442 \u0433\u043B\u043E\u0441\u0441\u0430\u0440\u0438\u0435\u043C.",
+      "set.glossaryFolder.desc": "\u041F\u0430\u043F\u043A\u0430 \u0441 \u043E\u0434\u043D\u043E\u0439 \u0437\u0430\u043C\u0435\u0442\u043A\u043E\u0439 \u043D\u0430 \u0442\u0435\u0440\u043C\u0438\u043D (\u0438\u043C\u044F \u0444\u0430\u0439\u043B\u0430 = \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u0430). \u041E\u0441\u0442\u0430\u0432\u044C\u0442\u0435 \u043F\u043E\u043B\u0435 \u043F\u0443\u0441\u0442\u044B\u043C \u2014 \u0438 \u0432\u0441\u0451 \u0445\u0440\u0430\u043D\u0438\u043B\u0438\u0449\u0435 \u0441\u0442\u0430\u043D\u0435\u0442 \u0433\u043B\u043E\u0441\u0441\u0430\u0440\u0438\u0435\u043C.",
       "set.termTemplate.name": "\u0428\u0430\u0431\u043B\u043E\u043D \u0442\u0435\u0440\u043C\u0438\u043D\u0430",
       "set.termTemplate.desc": "\u0417\u0430\u043C\u0435\u0442\u043A\u0430, \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u043C\u0430\u044F \u043A\u0430\u043A \u0442\u0435\u043B\u043E \u043D\u043E\u0432\u044B\u0445 \u0437\u0430\u043C\u0435\u0442\u043E\u043A \u0442\u0435\u0440\u043C\u0438\u043D\u043E\u0432; \u043F\u043B\u0435\u0439\u0441\u0445\u043E\u043B\u0434\u0435\u0440\u044B \u0432\u0440\u043E\u0434\u0435 {{title}} \u0438 {{date}} \u043F\u043E\u0434\u0441\u0442\u0430\u0432\u043B\u044F\u044E\u0442\u0441\u044F. \u041F\u0443\u0441\u0442\u043E = \u043F\u0443\u0441\u0442\u0430\u044F \u0437\u0430\u043C\u0435\u0442\u043A\u0430.",
       "set.scopeMode.name": "\u041E\u0431\u043B\u0430\u0441\u0442\u044C \u0441\u0432\u044F\u0437\u044B\u0432\u0430\u043D\u0438\u044F",
@@ -1358,11 +1359,12 @@ var require_ru2 = __commonJS({
       "modal.choose.body": "\u042D\u0442\u043E \u0441\u043B\u043E\u0432\u043E \u0441\u043E\u0432\u043F\u0430\u0434\u0430\u0435\u0442 \u0441 \u043D\u0435\u0441\u043A\u043E\u043B\u044C\u043A\u0438\u043C\u0438 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043C\u0438 \u2014 \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u043E\u0434\u0438\u043D:",
       "modal.abbrev.pickTerm": "\u041A \u043A\u0430\u043A\u043E\u043C\u0443 \u0442\u0435\u0440\u043C\u0438\u043D\u0443 \u043F\u0440\u0438\u0432\u044F\u0437\u0430\u0442\u044C \u0441\u043E\u043A\u0440\u0430\u0449\u0435\u043D\u0438\u0435?",
       "modal.abbrev.title": "\u0421\u043E\u043A\u0440\u0430\u0449\u0435\u043D\u0438\u0435 \u0434\u043B\u044F \xAB{term}\xBB",
-      "modal.abbrev.body": "\u041D\u0430\u043F\u0440\u0438\u043C\u0435\u0440: \u0426\u041D\u0421, \u0412\u041D\u0421, \u041E\u0420\u0412\u0418. \u0421\u043E\u043A\u0440\u0430\u0449\u0435\u043D\u0438\u044F \u043D\u0435 \u0441\u043A\u043B\u043E\u043D\u044F\u044E\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438 \u2014 \u0432\u0432\u043E\u0434\u0438 \u043A\u0430\u043A \u043E\u043D\u043E \u043F\u0438\u0448\u0435\u0442\u0441\u044F.",
-      "notice.noTerms": "\u0412 \u0432\u0435\u0439\u043B\u0442\u0435 \u043F\u043E\u043A\u0430 \u043D\u0435\u0442 \u043D\u0438 \u043E\u0434\u043D\u043E\u0433\u043E \u0442\u0435\u0440\u043C\u0438\u043D\u0430.",
+      "modal.abbrev.body": "\u041D\u0430\u043F\u0440\u0438\u043C\u0435\u0440: \u0426\u041D\u0421, \u0412\u041D\u0421, \u041E\u0420\u0412\u0418. \u0421\u043E\u043A\u0440\u0430\u0449\u0435\u043D\u0438\u044F \u043D\u0435 \u0441\u043A\u043B\u043E\u043D\u044F\u044E\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438 \u2014 \u0432\u0432\u043E\u0434\u0438\u0442\u0435 \u043A\u0430\u043A \u043E\u043D\u043E \u043F\u0438\u0448\u0435\u0442\u0441\u044F.",
+      "notice.noTerms": "\u0412 \u0445\u0440\u0430\u043D\u0438\u043B\u0438\u0449\u0435 \u043F\u043E\u043A\u0430 \u043D\u0435\u0442 \u043D\u0438 \u043E\u0434\u043D\u043E\u0433\u043E \u0442\u0435\u0440\u043C\u0438\u043D\u0430.",
       "notice.abbrevExists": "\xAB{abbrev}\xBB \u0443\u0436\u0435 \u043F\u0440\u0438\u0432\u044F\u0437\u0430\u043D\u043E \u043A \xAB{term}\xBB.",
       "notice.abbrevAdded": "\u0414\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u043E \u0441\u043E\u043A\u0440\u0430\u0449\u0435\u043D\u0438\u0435 \xAB{abbrev}\xBB \u2192 \xAB{term}\xBB.",
       "notice.abbrevAddedCollision": "\u0414\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u043E \xAB{abbrev}\xBB \u2192 \xAB{term}\xBB, \u043D\u043E \u043E\u043D\u043E \u0443\u0436\u0435 \u0441\u043E\u0432\u043F\u0430\u0434\u0430\u0435\u0442 \u0441: {others}.",
+      "notice.termFileMissing": "\u0417\u0430\u043C\u0435\u0442\u043A\u0430 \u0442\u0435\u0440\u043C\u0438\u043D\u0430 \xAB{term}\xBB \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u0430 \u2014 \u0432\u043E\u0437\u043C\u043E\u0436\u043D\u043E, \u0435\u0451 \u043F\u0435\u0440\u0435\u043C\u0435\u0441\u0442\u0438\u043B\u0438 \u0438\u043B\u0438 \u0443\u0434\u0430\u043B\u0438\u043B\u0438.",
       "btn.apply": "\u041F\u0440\u0438\u043C\u0435\u043D\u0438\u0442\u044C",
       "btn.cancel": "\u041E\u0442\u043C\u0435\u043D\u0430",
       "btn.write": "\u0417\u0430\u043F\u0438\u0441\u0430\u0442\u044C",
@@ -2709,6 +2711,7 @@ var require_matcher = __commonJS({
         for (const file of files) {
           const canonical = file.basename;
           const aliases = this.aliasesOf(file);
+          this.aliasFingerprints.set(file.path, JSON.stringify(aliases));
           if ([canonical, ...aliases].some((f) => excludeTerms.has(f.toLowerCase())))
             continue;
           const forms = [canonical, ...aliases].filter((x) => typeof x === "string" && x.trim());
@@ -3439,7 +3442,6 @@ var require_modals = __commonJS({
         contentEl.createEl("h3", { text: t2("modal.abbrev.title", { term: this.termName }) });
         contentEl.createEl("p", { cls: "glossary-section-desc", text: t2("modal.abbrev.body") });
         const input = contentEl.createEl("input", { type: "text", cls: "glossary-abbrev-input" });
-        input.style.width = "100%";
         const submit = () => {
           const v = input.value.trim();
           if (v) {
@@ -4053,7 +4055,7 @@ var require_actions = __commonJS({
       async writeAbbreviation(term, abbrev) {
         const file = this.app.vault.getAbstractFileByPath(term.path);
         if (!(file instanceof TFile2)) {
-          new Notice2(t2("notice.noTerms"));
+          new Notice2(t2("notice.termFileMissing", { term: term.canonical }));
           return;
         }
         const already = (this.aliasesOf(file) || []).some((a) => a.toLowerCase() === abbrev.toLowerCase());
@@ -4274,7 +4276,7 @@ var require_term_suggest = __commonJS({
         const plugin = this.plugin;
         if (!plugin.settings.linkSuggest)
           return null;
-        if (!file || !plugin.inScope(file.path) || plugin.isGlossaryFile(file))
+        if (!file || !plugin.inScope(file.path))
           return null;
         const line = editor.getLine(cursor.line);
         if (/[\p{L}\p{Nd}]/u.test(line[cursor.ch] || ""))
@@ -4298,13 +4300,14 @@ var require_term_suggest = __commonJS({
         const q = context.query;
         const qLower = q.toLowerCase();
         const byCanonical = /* @__PURE__ */ new Map();
+        const ownCanonical = plugin.activeCanonical();
         const seenCand = /* @__PURE__ */ new Set();
         for (const key of plugin.keysFor(q)) {
           const bucket = plugin.index.byKey.get(key);
           if (!bucket)
             continue;
           for (const c of bucket) {
-            if (c.wordCount !== 1 || seenCand.has(c))
+            if (c.wordCount !== 1 || seenCand.has(c) || c.canonical === ownCanonical)
               continue;
             seenCand.add(c);
             if (!byCanonical.has(c.canonical))
@@ -4312,7 +4315,7 @@ var require_term_suggest = __commonJS({
           }
         }
         for (const t3 of plugin.terms || []) {
-          if (byCanonical.has(t3.canonical))
+          if (byCanonical.has(t3.canonical) || t3.canonical === ownCanonical)
             continue;
           let form = null;
           if (t3.canonical.toLowerCase().startsWith(qLower))
@@ -4606,6 +4609,7 @@ var GlossaryLinkerPlugin = class extends Plugin {
     this.excludeWordKeys = /* @__PURE__ */ new Set();
     this.keysCache = /* @__PURE__ */ new Map();
     this.terms = [];
+    this.aliasFingerprints = /* @__PURE__ */ new Map();
     this._indexListeners = /* @__PURE__ */ new Set();
     await this.loadLanguages();
     this.rebuildIndex();
@@ -4627,20 +4631,29 @@ var GlossaryLinkerPlugin = class extends Plugin {
       this.updateStatusBar();
     });
     this.registerEvent(this.app.metadataCache.on("changed", (file) => {
-      if (this.isGlossaryPath(file.path))
-        this.scheduleRebuild();
+      if (!this.isGlossaryPath(file.path))
+        return;
+      const next = JSON.stringify(this.aliasesOf(file));
+      if (this.aliasFingerprints.get(file.path) === next)
+        return;
+      this.aliasFingerprints.set(file.path, next);
+      this.scheduleRebuild();
     }));
     this.registerEvent(this.app.vault.on("create", (file) => {
       if (this.isGlossaryPath(file.path))
         this.scheduleRebuild();
     }));
     this.registerEvent(this.app.vault.on("delete", (file) => {
-      if (this.isGlossaryPath(file.path))
-        this.scheduleRebuild();
+      if (!this.isGlossaryPath(file.path))
+        return;
+      this.aliasFingerprints.delete(file.path);
+      this.scheduleRebuild();
     }));
     this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
-      if (this.isGlossaryPath(file.path) || this.isGlossaryPath(oldPath))
-        this.scheduleRebuild();
+      if (!this.isGlossaryPath(file.path) && !this.isGlossaryPath(oldPath))
+        return;
+      this.aliasFingerprints.delete(oldPath);
+      this.scheduleRebuild();
     }));
     this.harvestOnSaveDebounced = debounce((file) => this.harvestFiles([file], this.settings.harvestOnSave !== "preview"), 1500, true);
     this.registerEvent(this.app.vault.on("modify", (file) => {

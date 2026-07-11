@@ -22,7 +22,11 @@ class GlossaryTermSuggest extends EditorSuggest {
   onTrigger(cursor, editor, file) {
     const plugin = this.plugin;
     if (!plugin.settings.linkSuggest) return null;
-    if (!file || !plugin.inScope(file.path) || plugin.isGlossaryFile(file)) return null;
+    // Don't offer to link a term inside its own note. In folder mode that's the
+    // same thing as "not a glossary file" (checked here); in whole-vault mode
+    // every note is a glossary file, so getSuggestions drops just this file's
+    // own canonical from the candidate set instead — same as the highlighter.
+    if (!file || !plugin.inScope(file.path)) return null;
 
     const line = editor.getLine(cursor.line);
     // Only complete at the end of a word — not while the cursor sits inside one.
@@ -50,6 +54,9 @@ class GlossaryTermSuggest extends EditorSuggest {
     const q = context.query;
     const qLower = q.toLowerCase();
     const byCanonical = new Map();
+    // Never suggest linking a term to itself from inside its own note — the
+    // same exclusion the highlighter applies via findMatches(text, activeCanonical()).
+    const ownCanonical = plugin.activeCanonical();
 
     // 'form' matches: typed word is an inflection of a term's first word.
     const seenCand = new Set();
@@ -57,7 +64,7 @@ class GlossaryTermSuggest extends EditorSuggest {
       const bucket = plugin.index.byKey.get(key);
       if (!bucket) continue;
       for (const c of bucket) {
-        if (c.wordCount !== 1 || seenCand.has(c)) continue;
+        if (c.wordCount !== 1 || seenCand.has(c) || c.canonical === ownCanonical) continue;
         seenCand.add(c);
         if (!byCanonical.has(c.canonical)) byCanonical.set(c.canonical, { canonical: c.canonical, matchedForm: c.canonical, kind: 'form' });
       }
@@ -65,7 +72,7 @@ class GlossaryTermSuggest extends EditorSuggest {
 
     // 'prefix' matches: typed text starts a term title or alias.
     for (const t of plugin.terms || []) {
-      if (byCanonical.has(t.canonical)) continue;
+      if (byCanonical.has(t.canonical) || t.canonical === ownCanonical) continue;
       let form = null;
       if (t.canonical.toLowerCase().startsWith(qLower)) form = t.canonical;
       else { const a = t.aliases.find((al) => al.toLowerCase().startsWith(qLower)); if (a) form = a; }

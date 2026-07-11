@@ -506,7 +506,7 @@ module.exports = {
   // only ever match verbatim, so they must be listed explicitly.
   async writeAbbreviation(term, abbrev) {
     const file = this.app.vault.getAbstractFileByPath(term.path);
-    if (!(file instanceof TFile)) { new Notice(t('notice.noTerms')); return; }
+    if (!(file instanceof TFile)) { new Notice(t('notice.termFileMissing', { term: term.canonical })); return; }
 
     const already = (this.aliasesOf(file) || []).some((a) => a.toLowerCase() === abbrev.toLowerCase());
     if (already || abbrev.toLowerCase() === term.canonical.toLowerCase()) {

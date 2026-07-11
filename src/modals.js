@@ -247,7 +247,6 @@ class AbbreviationTextModal extends Modal {
     contentEl.createEl('h3', { text: t('modal.abbrev.title', { term: this.termName }) });
     contentEl.createEl('p', { cls: 'glossary-section-desc', text: t('modal.abbrev.body') });
     const input = contentEl.createEl('input', { type: 'text', cls: 'glossary-abbrev-input' });
-    input.style.width = '100%';
     const submit = () => {
       const v = input.value.trim();
       if (v) { this.onSubmit(v); this.close(); }

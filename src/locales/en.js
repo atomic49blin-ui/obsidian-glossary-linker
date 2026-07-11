@@ -220,6 +220,7 @@ module.exports = {
   'notice.abbrevExists': '"{abbrev}" is already linked to "{term}".',
   'notice.abbrevAdded': 'Added abbreviation "{abbrev}" → "{term}".',
   'notice.abbrevAddedCollision': 'Added "{abbrev}" → "{term}", but it already matches: {others}.',
+  'notice.termFileMissing': 'Term note for "{term}" not found — it may have been moved or deleted.',
   'btn.apply': 'Apply',
   'btn.cancel': 'Cancel',
   'btn.write': 'Write',
